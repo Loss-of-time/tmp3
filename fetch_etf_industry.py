@@ -52,13 +52,13 @@ END_TX = "2026-07-31"
 
 
 def _tencent_page(code, n, end):
-    """拉一页腾讯 qfq 日线, 返回 [(date, close), ...] 升序。"""
+    """拉一页腾讯 qfq 日线, 返回 [(date, open, close), ...] 升序。"""
     pref = ("sz" if code.startswith("1") else "sh") + code
     url = (f"{TENCENT_URL}?param={pref},day,,{end},{n},qfq")
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     d = json.load(urllib.request.urlopen(req, timeout=15))
     day = d["data"][pref].get("day") or d["data"][pref].get("qfqday")
-    return [(r[0], round(float(r[2]), 4)) for r in day]
+    return [(r[0], round(float(r[1]), 4), round(float(r[2]), 4)) for r in day]
 
 
 def fetch(code, name):
@@ -84,7 +84,8 @@ def fetch(code, name):
             out = {
                 "code": code, "name": name,
                 "dates": [r[0] for r in rows],
-                "close": [r[1] for r in rows],
+                "open": [r[1] for r in rows],
+                "close": [r[2] for r in rows],
             }
             with open(f, "w") as fh:
                 json.dump(out, fh, ensure_ascii=False)

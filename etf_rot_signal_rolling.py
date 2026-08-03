@@ -14,15 +14,15 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from backtest import calc_metrics
-from etf_rot_signal import BT_START, load_data
+from etf_rot_signal import BT_START, load_data, load_benches
 from etf_rot_signal_filter import rotation_backtest
 
 WINDOW = 252
 STEP = 21
 
 
-def run(close_df, mode, bench):
-    values, trades = rotation_backtest(close_df, filter_mode=mode)
+def run(close_df, open_df, mode, bench):
+    values, trades = rotation_backtest(close_df, open_df=open_df, filter_mode=mode)
     bench = bench.reindex(values.index).ffill()
     idx = values.index
     rows = []
@@ -59,15 +59,24 @@ def summarize(name, df):
 def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     print("[1/3] 读取缓存 + 全周期回测...")
-    etfs, hs300_s = load_data()
+    etfs, opens, _ = load_data()
     close_df = pd.DataFrame(etfs).sort_index().ffill()
+    open_df = pd.DataFrame(opens).sort_index().reindex(close_df.index).ffill()
 
-    val_none, df_none, _ = run(close_df, "none", hs300_s)
-    val_e, df_e, _ = run(close_df, "E", hs300_s)
+    # 用纳指作基准(策略大部分时间与纳指同源成长风格)
+    bench = load_benches()["纳指"].dropna().reindex(close_df.index, method="ffill").dropna()
+
+    val_none, df_none, _ = run(close_df, open_df, "none", bench)
+    val_e, df_e, _ = run(close_df, open_df, "E", bench)
 
     print("[2/3] 汇总...")
     df_none = summarize("none", df_none)
     df_e = summarize("E", df_e)
+
+    # 双样本: E 与 none 的窗口年化分布是否一致
+    diff = df_e["annual_return"].values - df_none["annual_return"].values
+    print(f"         E 相对 none 窗口年化差: 均值 {diff.mean():+.2f}pp 中位 {pd.Series(diff).median():+.2f}pp")
+    print(f"         与 none 完全相同的窗口数: {(diff == 0).sum()}/{len(diff)}")
 
     csv_file = f"etf_rot_signal_rolling_{timestamp}.csv"
     df_e.to_csv(csv_file, index=False, encoding="utf-8-sig")
@@ -84,7 +93,7 @@ def main():
     fig.add_trace(go.Scatter(x=df_e["start"], y=df_e["max_drawdown"], mode="lines+markers",
                              name="E 回撤", yaxis="y2", line=dict(color="olive", dash="dash")))
     fig.add_trace(go.Scatter(x=df_e["start"], y=df_e["hs_annual"], mode="lines",
-                             name="沪深300年化", line=dict(color="gray", width=1)))
+                             name="纳指年化", line=dict(color="gray", width=1)))
     fig.update_layout(
         title=f"v7 信号轮动滚动回测 none vs E ({timestamp})<br><sup>窗口{WINDOW}日/步{STEP}日 | "
               f"MA200/LB180/GAP1.0/CD20/TRAIL20%/底仓45% | {BT_START} ~ 2026-08</sup>",
@@ -98,7 +107,7 @@ def main():
         df_disp["dd"] = df_disp["max_drawdown"].map(lambda v: f"{v:.1f}%")
         df_disp["hs"] = df_disp["hs_annual"].map(lambda v: f"{v:.1f}%")
         fig.add_trace(go.Table(
-            header=dict(values=[f"{name} 窗口开始", "结束", "年化", "夏普", "回撤", "沪深300", "跑赢", "持仓"]),
+            header=dict(values=[f"{name} 窗口开始", "结束", "年化", "夏普", "回撤", "纳指", "跑赢", "持仓"]),
             cells=dict(values=[
                 df_disp["start"], df_disp["end"], df_disp["annual"], df_disp["sharpe"],
                 df_disp["dd"], df_disp["hs"],

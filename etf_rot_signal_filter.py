@@ -22,18 +22,20 @@ import etf_rot_signal as S
 from backtest import calc_metrics
 
 
-def rotation_backtest(close_df, bt_start=S.BT_START, ma_n=S.MA_N, lookback=S.LOOKBACK,
+def rotation_backtest(close_df, open_df=None, bt_start=S.BT_START, ma_n=S.MA_N, lookback=S.LOOKBACK,
                       mom_gap=S.MOM_GAP, min_mom=S.MIN_MOM, trail=S.TRAIL,
                       base_w=S.BASE_W, base_etf=S.BASE_ETF, cooldown=S.COOLDOWN,
                       filter_mode="none", w_short=0.5):
-    """同 etf_rot_signal.rotation_backtest, 但加短期过滤/合并评分。"""
+    """同 etf_rot_signal.rotation_backtest (昨日信号+今日开盘成交), 但加短期过滤/合并评分。"""
     bt = close_df[bt_start:]
-    ma = bt.rolling(ma_n).mean()
-    above = bt > ma
-    mom = bt.pct_change(lookback)
-    mom20 = bt.pct_change(20)
-    mom60 = bt.pct_change(60)
-    ma20 = bt.rolling(20).mean()
+    sig_close = bt.shift(1)
+    ma = sig_close.rolling(ma_n).mean()
+    above = sig_close > ma
+    mom = sig_close.pct_change(lookback)
+    fill = open_df[bt_start:] if open_df is not None else bt
+    mom20 = sig_close.pct_change(20)
+    mom60 = sig_close.pct_change(60)
+    ma20 = sig_close.rolling(20).mean()
     lowvol = bt[base_etf]
 
     # 汉斯复合动量: 25日回归斜率年化 * R²
@@ -64,7 +66,7 @@ def rotation_backtest(close_df, bt_start=S.BT_START, ma_n=S.MA_N, lookback=S.LOO
             values.iloc[i] = 1.0
             continue
 
-        px = close_df.loc[date, code] if code else None
+        px = sig_close.loc[date, code] if code else None
         signal = above.loc[date]
 
         if code is not None:
@@ -75,7 +77,8 @@ def rotation_backtest(close_df, bt_start=S.BT_START, ma_n=S.MA_N, lookback=S.LOO
             elif px <= peak * (1 - trail):
                 reason = "trail"
             if reason:
-                proceeds = shares * px * (1 - S.COMMISSION)
+                exec_px = fill.loc[date, code]
+                proceeds = shares * exec_px * (1 - S.COMMISSION)
                 rot_cash += proceeds
                 last_sell[code] = i
                 shares = 0.0
@@ -89,13 +92,13 @@ def rotation_backtest(close_df, bt_start=S.BT_START, ma_n=S.MA_N, lookback=S.LOO
         if filter_mode == "B" and elig:
             elig = [c for c in elig if mom20.loc[date, c] > 0]
         elif filter_mode == "C" and elig:
-            elig = [c for c in elig if close_df.loc[date, c] > ma20.loc[date, c]]
+            elig = [c for c in elig if sig_close.loc[date, c] > ma20.loc[date, c]]
         elif filter_mode == "D" and elig:
             elig = [c for c in elig if mom60.loc[date, c] > 0]
         elif filter_mode in ("E", "F", "H") and elig:
-            # 不接飞刀: 距自身近期峰值(60日)回撤必须 < trail
-            peak60 = bt.iloc[max(0, i-60):i+1].max(axis=0)
-            elig = [c for c in elig if close_df.loc[date, c] >= peak60[c] * (1 - trail)]
+            # 不接飞刀: 距自身近期峰值(60日)回撤必须 < trail (基于昨日收盘)
+            peak60 = sig_close.iloc[max(0, i-60):i+1].max(axis=0)
+            elig = [c for c in elig if sig_close.loc[date, c] >= peak60[c] * (1 - trail)]
             if filter_mode == "F":
                 elig = [c for c in elig if mom20.loc[date, c] > -0.10]
         elif filter_mode == "I" and elig:
@@ -104,7 +107,7 @@ def rotation_backtest(close_df, bt_start=S.BT_START, ma_n=S.MA_N, lookback=S.LOO
         if len(elig) > 0:
             ref = score if filter_mode in ("G", "H", "I") else mom
             best = ref.loc[date, elig].idxmax()
-            best_px = close_df.loc[date, best]
+            best_px = fill.loc[date, best]
             if code is None:
                 target = rot_cash
                 shares = target / best_px
@@ -119,7 +122,8 @@ def rotation_backtest(close_df, bt_start=S.BT_START, ma_n=S.MA_N, lookback=S.LOO
                 best_mom = ref.loc[date, best]
                 if best_mom - cur_mom > mom_gap:
                     old_code = code
-                    proceeds = shares * px * (1 - S.COMMISSION)
+                    exec_px = fill.loc[date, old_code]
+                    proceeds = shares * exec_px * (1 - S.COMMISSION)
                     rot_cash += proceeds
                     target = rot_cash
                     shares = target / best_px
