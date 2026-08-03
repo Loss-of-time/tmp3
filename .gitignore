@@ -1,0 +1,40 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# 大缓存不提交 (v5 模拟盘只依赖 etf_industry 小缓存)
+cache_bt/stocks/
+cache_wyckoff/
+cache/
+
+# 回测/筛选生成的结果文件 (GitHub Pages 用 docs/ 下的报告)
+result_*.csv
+result_*.html
+bt_result_*.csv
+bt_result_*.html
+etf_result_*.csv
+etf_result_*.html
+etf_trades_*.csv
+etf_rot_result_*.csv
+etf_rot_result_*.html
+etf_rot_trades_*.csv
+momentum_result_*.csv
+momentum_result_*.html
+momentum_trades_*.csv
+wyckoff_result_*.csv
+wyckoff_result_*.html
+wyckoff_trades_*.csv
+wyckoff_sweep_*.csv
+wyckoff_sweep_*.html
+wyckoff_joint_*.csv
+wyckoff_joint.log
+wyckoff_run.log
+sweep_*.csv
+sweep_*.html
