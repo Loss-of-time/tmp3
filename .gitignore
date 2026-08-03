@@ -38,3 +38,5 @@ wyckoff_joint.log
 wyckoff_run.log
 sweep_*.csv
 sweep_*.html
+etf_rot_sweep_*.csv
+etf_rot_sweep_*.html
