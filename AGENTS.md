@@ -12,6 +12,20 @@
 - [x] v3 单票动量策略：`momentum.py` 时间序列动量（资金量小，单票满仓）
 - [x] v4 ETF 择时：`etf_timing.py` 牛熊开关（回撤小，可不满仓）
 - [x] v5 行业ETF轮动：`etf_rotation.py` 动量轮动+牛熊开关（收益高）
+- [x] v6 模拟盘：`paper_trade.py` + GitHub Actions 每日自动运行，GitHub Pages 展示
+
+## v6 GitHub 模拟盘 (`paper_trade.py`)
+
+- **用途**：v5 策略实盘模拟——每日增量更新行情 → 推进模拟账户 → 输出当前持仓/今日信号/净值曲线，GitHub Pages 展示（https://loss-of-time.github.io/tmp3/）
+- 模拟账户从**首次运行当天**开始（净值 1.0）：BASE_W=45% 恒持红利低波 + 剩余做轮动，规则与 etf_rotation.py 回测完全一致（MA200/动量180/40日调仓/20%止损）
+- 状态持久化 `paper_state.json`（start/持仓/成本/峰值/调仓计数器/净值历史/交易记录）；净值历史 `docs/data/nav.json`；报告 `docs/index.html`（plotly 净值曲线+持仓甘特图）
+- 数据增量更新：`incremental_fetch()` 从缓存最后日期往前 10 天重拉（保证 qfq 拼接一致）追加，akshare 限流隔 15s 重试 12 次，失败用旧缓存；首次运行从最新交易日开始、首日即调仓日
+- **GitHub Actions `.github/workflows/paper-trade.yml`**：cron `30 7 * * 1-5`（UTC=北京15:30 收盘后）+ workflow_dispatch；跑完 paper-bot 自动 commit `paper_state.json docs cache_bt/etf_industry` 并 push，再 deploy-pages 到 GitHub Pages
+- 依赖：`pip install akshare baostock pandas plotly`（paper_trade.py 顶层经 backtest/etf_rotation import baostock）
+- 踩坑：新 push 的 workflow 不会自动注册，需对 workflow 文件做改动再 push 触发扫描
+- **首个运行（2026-08-03）**：买入 5G通信(515050)，净值 0.9998（扣佣）
+- 仓库：Loss-of-time/tmp3（公开），本地改完 push 到 master 即触发下一次调度
+
 
 ## v5 行业ETF动量轮动 (`etf_rotation.py`)
 
@@ -86,6 +100,14 @@ source .venv/bin/activate && python3 -u etf_rotation.py
 ```
 
 读本地缓存，秒出。
+
+## 运行 v6
+
+```bash
+source .venv/bin/activate && python3 -u paper_trade.py
+```
+
+增量更新缓存后输出模拟盘状态（网络失败用旧缓存）。每日自动由 GitHub Actions 运行，无需手动。
 
 ## v1 回测策略 (`backtest.py`)
 
