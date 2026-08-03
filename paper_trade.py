@@ -179,11 +179,15 @@ def incremental_fetch(code, name, retries=12, pause=15):
             j = json.load(urllib.request.urlopen(req, timeout=15))
             day = j["data"][pref].get("day") or j["data"][pref].get("qfqday")
             new_dates = [r[0] for r in day]
+            new_open = [round(float(r[1]), 4) for r in day]
             new_close = [round(float(r[2]), 4) for r in day]
             keep_mask = [ts > last for ts in new_dates]
             merged_dates = d["dates"] + [x for x, k in zip(new_dates, keep_mask) if k]
+            merged_open = d.get("open", []) + [x for x, k in zip(new_open, keep_mask) if k]
             merged_close = d["close"] + [x for x, k in zip(new_close, keep_mask) if k]
             d["dates"], d["close"] = merged_dates, merged_close
+            if len(merged_open) == len(merged_dates):
+                d["open"] = merged_open
             with open(f, "w") as fh:
                 json.dump(d, fh, ensure_ascii=False)
             added = sum(keep_mask)

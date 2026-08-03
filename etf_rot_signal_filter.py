@@ -139,7 +139,7 @@ def rotation_backtest(close_df, bt_start=S.BT_START, ma_n=S.MA_N, lookback=S.LOO
 
 
 def main():
-    etfs, hs300 = load_data()
+    etfs, _, hs300 = load_data()
     close_df = pd.DataFrame(etfs)
     bench = hs300
 

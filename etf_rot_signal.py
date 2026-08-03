@@ -49,12 +49,15 @@ BENCHES = {"纳指": "cache_bt/ixic.json", "上证": "cache_bt/sh000001.json"}
 
 def load_data():
     etfs = {}
+    opens = {}
     for f in sorted(glob.glob(os.path.join(ETFS_DIR, "*.json"))):
         d = json.load(open(f))
-        etfs[d["code"]] = pd.Series(d["close"], index=pd.to_datetime(d["dates"])).sort_index()
+        dates = pd.to_datetime(d["dates"])
+        etfs[d["code"]] = pd.Series(d["close"], index=dates).sort_index()
+        opens[d["code"]] = pd.Series(d["open"], index=dates).sort_index()
     hs300 = json.load(open(HS300_CACHE))
     hs300_s = pd.Series(hs300["close"], index=pd.to_datetime(hs300["dates"])).sort_index()
-    return etfs, hs300_s
+    return etfs, opens, hs300_s
 
 
 def load_benches():
@@ -66,15 +69,24 @@ def load_benches():
     return out
 
 
-def rotation_backtest(close_df, bt_start=BT_START, ma_n=MA_N, lookback=LOOKBACK,
+def rotation_backtest(close_df, open_df=None, bt_start=BT_START, ma_n=MA_N, lookback=LOOKBACK,
                       mom_gap=MOM_GAP, min_mom=MIN_MOM, trail=TRAIL,
                       base_w=BASE_W, base_etf=BASE_ETF, cooldown=COOLDOWN):
-    """信号调仓回测。返回 (values, trades)。"""
+    """信号调仓回测。返回 (values, trades)。
+
+    成交模型: 今日用昨日收盘信号决策, 今日开盘价成交 (避免前视偏差)。
+    open_df 为空时回退用当日收盘成交 (无开盘数据)。
+    """
     bt = close_df[bt_start:]
-    ma = bt.rolling(ma_n).mean()
-    above = bt > ma
-    mom = bt.pct_change(lookback)
+    sig_close = bt.shift(1)              # 昨日收盘: 所有信号基于它
+    ma = sig_close.rolling(ma_n).mean()
+    above = sig_close > ma
+    mom = sig_close.pct_change(lookback)
     lowvol = bt[base_etf]
+    if open_df is not None:
+        fill = open_df[bt_start:]
+    else:
+        fill = bt
 
     values = pd.Series(index=bt.index, dtype=float)
     base_shares = base_w / lowvol.iloc[0]
@@ -90,10 +102,10 @@ def rotation_backtest(close_df, bt_start=BT_START, ma_n=MA_N, lookback=LOOKBACK,
             values.iloc[i] = 1.0
             continue
 
-        px = close_df.loc[date, code] if code else None
+        px = sig_close.loc[date, code] if code else None
         signal = above.loc[date]
 
-        # 轮动仓每日检查: 趋势破坏或移动止损
+        # 轮动仓每日检查 (昨日收盘信号): 趋势破坏或移动止损
         if code is not None:
             peak = max(peak, px)
             reason = None
@@ -102,7 +114,8 @@ def rotation_backtest(close_df, bt_start=BT_START, ma_n=MA_N, lookback=LOOKBACK,
             elif px <= peak * (1 - trail):
                 reason = "trail"
             if reason:
-                proceeds = shares * px * (1 - COMMISSION)
+                exec_px = fill.loc[date, code]
+                proceeds = shares * exec_px * (1 - COMMISSION)
                 rot_cash += proceeds
                 last_sell[code] = i
                 shares = 0.0
@@ -110,18 +123,18 @@ def rotation_backtest(close_df, bt_start=BT_START, ma_n=MA_N, lookback=LOOKBACK,
                 peak = 0.0
                 trades.append({"date": date, "action": "sell", "code": None, "reason": reason})
 
-        # 每日信号检视
+        # 每日信号检视 (昨日收盘信号)
         elig = [c for c in signal[signal].index
                 if not np.isnan(mom.loc[date, c]) and mom.loc[date, c] > min_mom
                 and (cooldown == 0 or i - last_sell.get(c, -10**9) > cooldown)]
         # 不接飞刀: 距自身近期峰值(60日)回撤 >= TRAIL 的候选视为刚崩, 拦停
         # (实验见 etf_rot_signal_filter.py 模式 E: 25.1% vs 23.3%, 回撤24.7% vs 29.9%)
         if elig:
-            peak60 = bt.iloc[max(0, i-60):i+1].max(axis=0)
-            elig = [c for c in elig if close_df.loc[date, c] >= peak60[c] * (1 - trail)]
+            peak60 = sig_close.iloc[max(0, i-60):i+1].max(axis=0)
+            elig = [c for c in elig if sig_close.loc[date, c] >= peak60[c] * (1 - trail)]
         if len(elig) > 0:
             best = mom.loc[date, elig].idxmax()
-            best_px = close_df.loc[date, best]
+            best_px = fill.loc[date, best]
             if code is None:
                 target = rot_cash
                 shares = target / best_px
@@ -136,7 +149,8 @@ def rotation_backtest(close_df, bt_start=BT_START, ma_n=MA_N, lookback=LOOKBACK,
                 best_mom = mom.loc[date, best]
                 if best_mom - cur_mom > mom_gap:
                     old_code = code
-                    proceeds = shares * px * (1 - COMMISSION)
+                    exec_px = fill.loc[date, old_code]
+                    proceeds = shares * exec_px * (1 - COMMISSION)
                     rot_cash += proceeds
                     target = rot_cash
                     shares = target / best_px
@@ -148,7 +162,7 @@ def rotation_backtest(close_df, bt_start=BT_START, ma_n=MA_N, lookback=LOOKBACK,
                                    "reason": f"换 {old_code}",
                                    "mom": round(float(best_mom) * 100, 1)})
 
-        px = close_df.loc[date, code] if code else None
+        px = bt.loc[date, code] if code else None
         mv = base_shares * lowvol.iloc[i] + rot_cash + (shares * px if code else 0)
         values.iloc[i] = mv
 
@@ -241,15 +255,16 @@ def plot_results(sv, benchs, trades, names, timestamp):
 def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     print("[1/2] 读取缓存...")
-    etfs, _ = load_data()
+    etfs, opens, _ = load_data()
     close_df = pd.DataFrame(etfs).sort_index().ffill()
+    open_df = pd.DataFrame(opens).sort_index().reindex(close_df.index).ffill()
     names = {json.load(open(f))["code"]: json.load(open(f))["name"]
              for f in glob.glob(os.path.join(ETFS_DIR, "*.json"))}
     print(f"      {len(etfs)} 只: " + ", ".join(names[c] for c in close_df.columns))
 
     print(f"[2/2] 回测 (每日检视, MA{MA_N}, 动量{LOOKBACK}日, 动量差>{MOM_GAP:.0%}切换, "
           f"止损{TRAIL:.0%}, 底仓{BASE_W:.0%})...")
-    values, trades = rotation_backtest(close_df)
+    values, trades = rotation_backtest(close_df, open_df=open_df)
 
     benches = {}
     for name, s in load_benches().items():

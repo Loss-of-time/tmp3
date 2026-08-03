@@ -282,8 +282,9 @@ chart.on('legendselectchanged', () => {});
 
 
 def load_close_df():
-    """读本地缓存, 若最新日期早于今天则增量更新。返回 (close_df, names)。"""
+    """读本地缓存, 若最新日期早于今天则增量更新。返回 (close_df, open_df, names)。"""
     close = {}
+    open_ = {}
     names = {}
     need_update = []
     for code, name in ALL_ETFS.items():
@@ -293,6 +294,7 @@ def load_close_df():
             continue
         d = json.load(open(f))
         close[code] = pd.Series(d["close"], index=pd.to_datetime(d["dates"]))
+        open_[code] = pd.Series(d["open"], index=pd.to_datetime(d["dates"]))
         names[code] = d.get("name", name)
         if pd.Timestamp(d["dates"][-1]) < pd.Timestamp(date.today()):
             need_update.append(code)
@@ -303,11 +305,13 @@ def load_close_df():
                 incremental_fetch(code, ALL_ETFS[code])
                 d = json.load(open(os.path.join(ETFS_DIR, f"{code}.json")))
                 close[code] = pd.Series(d["close"], index=pd.to_datetime(d["dates"]))
+                open_[code] = pd.Series(d["open"], index=pd.to_datetime(d["dates"]))
                 names[code] = d.get("name", ALL_ETFS[code])
             except Exception as e:
                 print(f"  {code} 更新失败, 用缓存: {str(e)[:80]}")
     close_df = pd.DataFrame(close).sort_index()
-    return close_df[~close_df.index.duplicated()].ffill(), names
+    open_df = pd.DataFrame(open_).sort_index().reindex(close_df.index).ffill()
+    return close_df[~close_df.index.duplicated()].ffill(), open_df, names
 
 
 def load_state():
@@ -321,13 +325,21 @@ def save_state(state):
         json.dump(state, fh, ensure_ascii=False, indent=2)
 
 
-def simulate(state, close_df):
+def simulate(state, close_df, open_df=None):
     """从模拟账户起始日完整重放至最新交易日。幂等: 每次运行都从 start 重放,
-    不依赖数据框行数。返回 (state, today_signal)。"""
-    ma = close_df.rolling(MA_N).mean()
-    above = close_df > ma
-    mom = close_df.pct_change(LOOKBACK)
+    不依赖数据框行数。返回 (state, today_signal)。
+
+    成交模型: 今日用昨日收盘信号决策, 今日开盘价成交 (避免前视偏差)。
+    """
+    sig_close = close_df.shift(1)        # 昨日收盘: 所有信号基于它
+    ma = sig_close.rolling(MA_N).mean()
+    above = sig_close > ma
+    mom = sig_close.pct_change(LOOKBACK)
     lowvol = close_df[BASE_ETF]
+    if open_df is not None:
+        fill = open_df
+    else:
+        fill = close_df
 
     if state is None:
         start_date = close_df.index[-1]
@@ -352,7 +364,7 @@ def simulate(state, close_df):
         signal = above.loc[date]
 
         if code is not None:
-            px = close_df.loc[date, code]
+            px = sig_close.loc[date, code]
             peak = max(peak, px)
             reason = None
             if not bool(signal[code]):
@@ -360,7 +372,8 @@ def simulate(state, close_df):
             elif px <= peak * (1 - TRAIL):
                 reason = "trail"
             if reason:
-                rot_cash += shares * px * (1 - COMMISSION)
+                exec_px = fill.loc[date, code]
+                rot_cash += shares * exec_px * (1 - COMMISSION)
                 last_sell[code] = i
                 shares = 0.0
                 code = None
@@ -372,11 +385,11 @@ def simulate(state, close_df):
                 if not np.isnan(mom.loc[date, c]) and mom.loc[date, c] > MIN_MOM
                 and (COOLDOWN == 0 or i - last_sell.get(c, -10**9) > COOLDOWN)]
         if elig:
-            peak60 = close_df.iloc[max(0, i-60):i+1].max(axis=0)
-            elig = [c for c in elig if close_df.loc[date, c] >= peak60[c] * (1 - TRAIL)]
+            peak60 = sig_close.iloc[max(0, i-60):i+1].max(axis=0)
+            elig = [c for c in elig if sig_close.loc[date, c] >= peak60[c] * (1 - TRAIL)]
         if len(elig) > 0:
             best = mom.loc[date, elig].idxmax()
-            best_px = close_df.loc[date, best]
+            best_px = fill.loc[date, best]
             if code is None:
                 target = rot_cash
                 shares = target / best_px
@@ -391,8 +404,8 @@ def simulate(state, close_df):
                 best_mom = mom.loc[date, best]
                 if best_mom - cur_mom > MOM_GAP:
                     old = code
-                    px = close_df.loc[date, old]
-                    rot_cash += shares * px * (1 - COMMISSION)
+                    exec_px = fill.loc[date, old]
+                    rot_cash += shares * exec_px * (1 - COMMISSION)
                     shares = 0.0
                     target = rot_cash
                     shares = target / best_px
@@ -548,7 +561,7 @@ def build_report(state, today_signal, close_df, names, bench_series):
 
 
 def main():
-    close_df, names = load_close_df()
+    close_df, open_df, names = load_close_df()
     update_bench()
     bench_series = {}
     for name, path in BENCH_CACHES.items():
@@ -556,7 +569,7 @@ def main():
         bench_series[name] = pd.Series(d["close"], index=pd.to_datetime(d["dates"])).sort_index()
     print(f"数据: {len(close_df)} 个交易日, {len(close_df.columns)} 只")
     state = load_state()
-    state, today_signal = simulate(state, close_df)
+    state, today_signal = simulate(state, close_df, open_df=open_df)
     save_state(state)
     report = build_report(state, today_signal, close_df, names, bench_series)
     print(report)
