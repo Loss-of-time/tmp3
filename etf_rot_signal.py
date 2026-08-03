@@ -13,6 +13,7 @@
 - 每日检查轮动仓: 跌破 MA200 (趋势破坏) 或峰值回撤 TRAIL 离场
 - 空仓时: 有 ETF 站上 MA200 且动量 > 0, 买动量最强一只
 - 持仓时: 若存在候选动量超过持仓 MOM_GAP 以上, 切换过去 (否则续持)
+- 不接飞刀: 距自身 60 日峰值回撤 >= TRAIL 的候选拦停 (等回撤收敛再入)
 - 每日检视 => 无相位, 起跑日平移结果不变
 - 底仓 BASE_W 恒持红利低波, 剩余做轮动; 空仓吃现金 CASH_APR
 """
@@ -103,6 +104,11 @@ def rotation_backtest(close_df, bt_start=BT_START, ma_n=MA_N, lookback=LOOKBACK,
         elig = [c for c in signal[signal].index
                 if not np.isnan(mom.loc[date, c]) and mom.loc[date, c] > min_mom
                 and (cooldown == 0 or i - last_sell.get(c, -10**9) > cooldown)]
+        # 不接飞刀: 距自身近期峰值(60日)回撤 >= TRAIL 的候选视为刚崩, 拦停
+        # (实验见 etf_rot_signal_filter.py 模式 E: 25.1% vs 23.3%, 回撤24.7% vs 29.9%)
+        if elig:
+            peak60 = bt.iloc[max(0, i-60):i+1].max(axis=0)
+            elig = [c for c in elig if close_df.loc[date, c] >= peak60[c] * (1 - trail)]
         if len(elig) > 0:
             best = mom.loc[date, elig].idxmax()
             best_px = close_df.loc[date, best]

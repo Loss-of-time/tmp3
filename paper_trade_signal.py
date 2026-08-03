@@ -320,6 +320,9 @@ def simulate(state, close_df):
         elig = [c for c in signal[signal].index
                 if not np.isnan(mom.loc[date, c]) and mom.loc[date, c] > MIN_MOM
                 and (COOLDOWN == 0 or i - last_sell.get(c, -10**9) > COOLDOWN)]
+        if elig:
+            peak60 = close_df.iloc[max(0, i-60):i+1].max(axis=0)
+            elig = [c for c in elig if close_df.loc[date, c] >= peak60[c] * (1 - TRAIL)]
         if len(elig) > 0:
             best = mom.loc[date, elig].idxmax()
             best_px = close_df.loc[date, best]
