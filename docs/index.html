@@ -1,7 +1,93 @@
-<html>
-<head><meta charset="utf-8" /></head>
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>行业ETF轮动策略模拟盘</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<style>
+  body{margin:0;font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+       background:#f5f7fa;color:#1e293b}
+  .wrap{max-width:960px;margin:0 auto;padding:24px 16px 48px}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:#64748b;font-size:13px;margin:0 0 4px;line-height:1.6}
+  .metrics{color:#94a3b8;font-size:12px;margin:0 0 20px}
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px}
+  .card span{display:block;color:#94a3b8;font-size:12px;margin-bottom:6px}
+  .card b{font-size:15px}
+  #chart{background:#fff;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:28px}
+  h2{font-size:16px;margin:0 0 12px}
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2e8f0;
+        border-radius:10px;overflow:hidden;font-size:13px}
+  th,td{padding:9px 12px;text-align:left;border-bottom:1px solid #f1f5f9}
+  th{background:#f8fafc;color:#64748b;font-weight:600}
+  .badge{padding:2px 8px;border-radius:999px;font-size:12px;color:#fff}
+  .badge.buy{background:#10b981}.badge.sell{background:#ef4444}.badge.switch{background:#3b82f6}
+</style>
+</head>
 <body>
-    <div style="height:700px; width:100%;">                        <script>window.PlotlyConfig = {MathJaxConfig: 'local'};</script>
-        <script charset="utf-8" src="https://cdn.plot.ly/plotly-3.7.0.min.js" integrity="sha256-jvTGqxNp8AGWEcvNLVuKr+8j5dGe9Yw51LQkmDH+IYA=" crossorigin="anonymous"></script>                <div id="21237d19-19e4-4d41-8ccf-219dba86600d" class="plotly-graph-div" style="height:100%; width:100%;"></div>            <script>                window.PLOTLYENV=window.PLOTLYENV || {};                                if (document.getElementById("21237d19-19e4-4d41-8ccf-219dba86600d")) {                    Plotly.newPlot(                        "21237d19-19e4-4d41-8ccf-219dba86600d",                        [{"line":{"width":2},"mode":"lines","name":"\u7b56\u7565\u51c0\u503c","x":["2026-08-03"],"y":{"dtype":"f8","bdata":"PE7RkVz+7z8="},"type":"scatter","xaxis":"x","yaxis":"y"},{"marker":{"size":10},"mode":"markers","name":"5G\u901a\u4fe1","showlegend":false,"x":["2026-08-03"],"y":[1],"type":"scatter","xaxis":"x2","yaxis":"y2"}],                        {"template":{"data":{"histogram2dcontour":[{"type":"histogram2dcontour","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"choropleth":[{"type":"choropleth","colorbar":{"outlinewidth":0,"ticks":""}}],"histogram2d":[{"type":"histogram2d","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"heatmap":[{"type":"heatmap","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"contourcarpet":[{"type":"contourcarpet","colorbar":{"outlinewidth":0,"ticks":""}}],"contour":[{"type":"contour","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"surface":[{"type":"surface","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"mesh3d":[{"type":"mesh3d","colorbar":{"outlinewidth":0,"ticks":""}}],"scatter":[{"fillpattern":{"fillmode":"overlay","size":10,"solidity":0.2},"type":"scatter"}],"parcoords":[{"type":"parcoords","line":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterpolargl":[{"type":"scatterpolargl","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"bar":[{"error_x":{"color":"#2a3f5f"},"error_y":{"color":"#2a3f5f"},"marker":{"line":{"color":"#E5ECF6","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"bar"}],"scattergeo":[{"type":"scattergeo","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterpolar":[{"type":"scatterpolar","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"histogram":[{"marker":{"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"histogram"}],"scattergl":[{"type":"scattergl","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatter3d":[{"type":"scatter3d","line":{"colorbar":{"outlinewidth":0,"ticks":""}},"marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattermap":[{"type":"scattermap","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattermapbox":[{"type":"scattermapbox","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterternary":[{"type":"scatterternary","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattercarpet":[{"type":"scattercarpet","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"carpet":[{"aaxis":{"endlinecolor":"#2a3f5f","gridcolor":"white","linecolor":"white","minorgridcolor":"white","startlinecolor":"#2a3f5f"},"baxis":{"endlinecolor":"#2a3f5f","gridcolor":"white","linecolor":"white","minorgridcolor":"white","startlinecolor":"#2a3f5f"},"type":"carpet"}],"table":[{"cells":{"fill":{"color":"#EBF0F8"},"line":{"color":"white"}},"header":{"fill":{"color":"#C8D4E3"},"line":{"color":"white"}},"type":"table"}],"barpolar":[{"marker":{"line":{"color":"#E5ECF6","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"barpolar"}],"pie":[{"automargin":true,"type":"pie"}]},"layout":{"autotypenumbers":"strict","colorway":["#636efa","#EF553B","#00cc96","#ab63fa","#FFA15A","#19d3f3","#FF6692","#B6E880","#FF97FF","#FECB52"],"font":{"color":"#2a3f5f"},"hovermode":"closest","hoverlabel":{"align":"left"},"paper_bgcolor":"white","plot_bgcolor":"#E5ECF6","polar":{"bgcolor":"#E5ECF6","angularaxis":{"gridcolor":"white","linecolor":"white","ticks":""},"radialaxis":{"gridcolor":"white","linecolor":"white","ticks":""}},"ternary":{"bgcolor":"#E5ECF6","aaxis":{"gridcolor":"white","linecolor":"white","ticks":""},"baxis":{"gridcolor":"white","linecolor":"white","ticks":""},"caxis":{"gridcolor":"white","linecolor":"white","ticks":""}},"coloraxis":{"colorbar":{"outlinewidth":0,"ticks":""}},"colorscale":{"sequential":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"sequentialminus":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"diverging":[[0,"#8e0152"],[0.1,"#c51b7d"],[0.2,"#de77ae"],[0.3,"#f1b6da"],[0.4,"#fde0ef"],[0.5,"#f7f7f7"],[0.6,"#e6f5d0"],[0.7,"#b8e186"],[0.8,"#7fbc41"],[0.9,"#4d9221"],[1,"#276419"]]},"xaxis":{"gridcolor":"white","linecolor":"white","ticks":"","title":{"standoff":15},"zerolinecolor":"white","automargin":true,"zerolinewidth":2},"yaxis":{"gridcolor":"white","linecolor":"white","ticks":"","title":{"standoff":15},"zerolinecolor":"white","automargin":true,"zerolinewidth":2},"scene":{"xaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2},"yaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2},"zaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2}},"shapedefaults":{"line":{"color":"#2a3f5f"}},"annotationdefaults":{"arrowcolor":"#2a3f5f","arrowhead":0,"arrowwidth":1},"geo":{"bgcolor":"white","landcolor":"#E5ECF6","subunitcolor":"white","showland":true,"showlakes":true,"lakecolor":"white"},"title":{"x":0.05},"mapbox":{"style":"light"}}},"xaxis":{"anchor":"y","domain":[0.0,1.0],"matches":"x2","showticklabels":false},"yaxis":{"anchor":"x","domain":[0.47200000000000003,1.0]},"xaxis2":{"anchor":"y2","domain":[0.0,1.0]},"yaxis2":{"anchor":"x2","domain":[0.0,0.35200000000000004]},"annotations":[{"font":{"size":16},"showarrow":false,"text":"\u6a21\u62df\u76d8\u51c0\u503c","x":0.5,"xanchor":"center","xref":"paper","y":1.0,"yanchor":"bottom","yref":"paper"},{"font":{"size":16},"showarrow":false,"text":"\u8f6e\u52a8\u4ed3\u6301\u4ed3\u6807\u7684","x":0.5,"xanchor":"center","xref":"paper","y":0.35200000000000004,"yanchor":"bottom","yref":"paper"}],"title":{"text":"\u884c\u4e1aETF\u8f6e\u52a8\u7b56\u7565\u6a21\u62df\u76d8\u003cbr\u003e\u003csup\u003e\u5e95\u4ed345% \u7ea2\u5229\u4f4e\u6ce2 | \u8f6e\u52a8 MA200\u002f\u52a8\u91cf180\u002f\u6bcf40\u65e5\u002f\u6b62\u635f20% | \u8d77\u59cb 2026-08-03 ~ 2026-08-03\u003c\u002fsup\u003e"},"height":700},                        {"responsive": true}                    )                };            </script>        </div>
+<div class="wrap">
+  <h1>行业ETF轮动策略模拟盘</h1>
+  <p class="sub" id="sub"></p>
+  <p class="metrics" id="metrics"></p>
+  <div class="cards">
+    <div class="card"><span>当前持仓</span><b id="holding"></b></div>
+    <div class="card"><span>今日操作</span><b id="action"></b></div>
+    <div class="card"><span>净值</span><b id="nav"></b></div>
+    <div class="card"><span>自起始收益</span><b id="ret"></b></div>
+  </div>
+  <div id="chart" style="height:520px;"></div>
+  <h2>交易记录</h2>
+  <table><thead><tr><th>日期</th><th>操作</th><th>标的</th><th>原因</th></tr></thead>
+  <tbody id="trades"></tbody></table>
+</div>
+<script id="data" type="application/json">{"dates": ["2026-08-03"], "navs": [0.9998], "segs": [{"name": "5G通信", "color": "#636efa", "data": [1]}], "trades": [{"date": "2026-08-03", "label": "买入", "kind": "buy", "name": "5G通信", "reason": "new"}], "meta": {"holding": "底仓 45% 红利低波 + 轮动 5G通信", "action": "今日buy 5G通信", "nav": "0.9998", "ret": "-", "sub": "底仓 45% 红利低波 | 轮动 MA200/动量180/每40日/止损20% | 起始 2026-08-03 ~ 2026-08-03", "metrics": "-"}}</script>
+<script>
+const D = JSON.parse(document.getElementById('data').textContent);
+document.getElementById('sub').textContent = D.meta.sub;
+document.getElementById('metrics').textContent = D.meta.metrics;
+document.getElementById('holding').textContent = D.meta.holding;
+document.getElementById('action').textContent = D.meta.action;
+document.getElementById('nav').textContent = D.meta.nav;
+document.getElementById('ret').textContent = D.meta.ret;
+
+const tb = document.getElementById('trades');
+for (const t of D.trades) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td>${t.date}</td><td><span class="badge ${t.kind}">${t.label}</span></td><td>${t.name}</td><td>${t.reason}</td>`;
+  tb.appendChild(tr);
+}
+
+const chart = echarts.init(document.getElementById('chart'));
+chart.setOption({
+  tooltip: {trigger: 'axis', axisPointer: {type: 'line'}},
+  legend: {top: 0, textStyle: {fontSize: 12}, type: 'scroll'},
+  grid: [
+    {left: 56, right: 20, top: 40, height: '50%'},
+    {left: 56, right: 20, top: '77%', height: '16%'}
+  ],
+  xAxis: [
+    {type: 'category', data: D.dates, boundaryGap: false, gridIndex: 0,
+     axisLabel: {fontSize: 11}, axisLine: {lineStyle: {color: '#cbd5e1'}}},
+    {type: 'category', data: D.dates, gridIndex: 1, show: false}
+  ],
+  yAxis: [
+    {gridIndex: 0, scale: true, name: '净值', nameTextStyle: {color: '#94a3b8'},
+     axisLabel: {fontSize: 11}, splitLine: {lineStyle: {color: '#eef2f7'}}},
+    {gridIndex: 1, show: false, max: 1.2}
+  ],
+  series: [
+    {name: '净值', type: 'line', data: D.navs, smooth: true, showSymbol: false,
+     lineStyle: {width: 2.5, color: '#636efa'}, areaStyle: {color: '#636efa', opacity: 0.12}},
+    ...D.segs.map(s => ({
+      name: s.name, type: 'bar', stack: 'rot', data: s.data,
+      xAxisIndex: 1, yAxisIndex: 1, barWidth: '70%',
+      itemStyle: {color: s.color, borderRadius: [4, 4, 4, 4]},
+      emphasis: {itemStyle: {color: s.color}}
+    }))
+  ]
+});
+</script>
 </body>
 </html>

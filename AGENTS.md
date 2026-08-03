@@ -18,7 +18,7 @@
 
 - **用途**：v5 策略实盘模拟——每日增量更新行情 → 推进模拟账户 → 输出当前持仓/今日信号/净值曲线，GitHub Pages 展示（https://loss-of-time.github.io/tmp3/）
 - 模拟账户从**首次运行当天**开始（净值 1.0）：BASE_W=45% 恒持红利低波 + 剩余做轮动，规则与 etf_rotation.py 回测完全一致（MA200/动量180/40日调仓/20%止损）
-- 状态持久化 `paper_state.json`（start/持仓/成本/峰值/调仓计数器/净值历史/交易记录）；净值历史 `docs/data/nav.json`；报告 `docs/index.html`（plotly 净值曲线+持仓甘特图）
+- 状态持久化 `paper_state.json`（start/持仓/成本/峰值/调仓计数器/净值历史/交易记录）；净值历史 `docs/data/nav.json`；报告 `docs/index.html`（ECharts CDN 渲染净值曲线+轮动持仓区间色条+交易记录表，纯 JS 免后端，数据内嵌 JSON）
 - 数据增量更新：`incremental_fetch()` 从缓存最后日期往前 10 天重拉（保证 qfq 拼接一致）追加，akshare 限流隔 15s 重试 12 次，失败用旧缓存；首次运行从最新交易日开始、首日即调仓日
 - **GitHub Actions `.github/workflows/paper-trade.yml`**：cron `30 7 * * 1-5`（UTC=北京15:30 收盘后）+ workflow_dispatch；跑完 paper-bot 自动 commit `paper_state.json docs cache_bt/etf_industry` 并 push，再 deploy-pages 到 GitHub Pages
 - 依赖：`pip install akshare baostock pandas plotly`（paper_trade.py 顶层经 backtest/etf_rotation import baostock）

@@ -16,8 +16,6 @@ from datetime import datetime, date
 
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 from backtest import calc_metrics
 from etf_rotation import (
@@ -31,6 +29,102 @@ REPORT_DIR = "docs"
 NAV_FILE = os.path.join(REPORT_DIR, "data", "nav.json")
 
 ALL_ETFS = {**ETFS, **LOWVOL}
+
+
+HTML_TEMPLATE = """<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>行业ETF轮动策略模拟盘</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<style>
+  body{margin:0;font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+       background:#f5f7fa;color:#1e293b}
+  .wrap{max-width:960px;margin:0 auto;padding:24px 16px 48px}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:#64748b;font-size:13px;margin:0 0 4px;line-height:1.6}
+  .metrics{color:#94a3b8;font-size:12px;margin:0 0 20px}
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px}
+  .card span{display:block;color:#94a3b8;font-size:12px;margin-bottom:6px}
+  .card b{font-size:15px}
+  #chart{background:#fff;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:28px}
+  h2{font-size:16px;margin:0 0 12px}
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2e8f0;
+        border-radius:10px;overflow:hidden;font-size:13px}
+  th,td{padding:9px 12px;text-align:left;border-bottom:1px solid #f1f5f9}
+  th{background:#f8fafc;color:#64748b;font-weight:600}
+  .badge{padding:2px 8px;border-radius:999px;font-size:12px;color:#fff}
+  .badge.buy{background:#10b981}.badge.sell{background:#ef4444}.badge.switch{background:#3b82f6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>行业ETF轮动策略模拟盘</h1>
+  <p class="sub" id="sub"></p>
+  <p class="metrics" id="metrics"></p>
+  <div class="cards">
+    <div class="card"><span>当前持仓</span><b id="holding"></b></div>
+    <div class="card"><span>今日操作</span><b id="action"></b></div>
+    <div class="card"><span>净值</span><b id="nav"></b></div>
+    <div class="card"><span>自起始收益</span><b id="ret"></b></div>
+  </div>
+  <div id="chart" style="height:520px;"></div>
+  <h2>交易记录</h2>
+  <table><thead><tr><th>日期</th><th>操作</th><th>标的</th><th>原因</th></tr></thead>
+  <tbody id="trades"></tbody></table>
+</div>
+<script id="data" type="application/json">__DATA__</script>
+<script>
+const D = JSON.parse(document.getElementById('data').textContent);
+document.getElementById('sub').textContent = D.meta.sub;
+document.getElementById('metrics').textContent = D.meta.metrics;
+document.getElementById('holding').textContent = D.meta.holding;
+document.getElementById('action').textContent = D.meta.action;
+document.getElementById('nav').textContent = D.meta.nav;
+document.getElementById('ret').textContent = D.meta.ret;
+
+const tb = document.getElementById('trades');
+for (const t of D.trades) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td>${t.date}</td><td><span class="badge ${t.kind}">${t.label}</span></td><td>${t.name}</td><td>${t.reason}</td>`;
+  tb.appendChild(tr);
+}
+
+const chart = echarts.init(document.getElementById('chart'));
+chart.setOption({
+  tooltip: {trigger: 'axis', axisPointer: {type: 'line'}},
+  legend: {top: 0, textStyle: {fontSize: 12}, type: 'scroll'},
+  grid: [
+    {left: 56, right: 20, top: 40, height: '50%'},
+    {left: 56, right: 20, top: '77%', height: '16%'}
+  ],
+  xAxis: [
+    {type: 'category', data: D.dates, boundaryGap: false, gridIndex: 0,
+     axisLabel: {fontSize: 11}, axisLine: {lineStyle: {color: '#cbd5e1'}}},
+    {type: 'category', data: D.dates, gridIndex: 1, show: false}
+  ],
+  yAxis: [
+    {gridIndex: 0, scale: true, name: '净值', nameTextStyle: {color: '#94a3b8'},
+     axisLabel: {fontSize: 11}, splitLine: {lineStyle: {color: '#eef2f7'}}},
+    {gridIndex: 1, show: false, max: 1.2}
+  ],
+  series: [
+    {name: '净值', type: 'line', data: D.navs, smooth: true, showSymbol: false,
+     lineStyle: {width: 2.5, color: '#636efa'}, areaStyle: {color: '#636efa', opacity: 0.12}},
+    ...D.segs.map(s => ({
+      name: s.name, type: 'bar', stack: 'rot', data: s.data,
+      xAxisIndex: 1, yAxisIndex: 1, barWidth: '70%',
+      itemStyle: {color: s.color, borderRadius: [4, 4, 4, 4]},
+      emphasis: {itemStyle: {color: s.color}}
+    }))
+  ]
+});
+</script>
+</body>
+</html>
+"""
 
 
 def load_close_df():
@@ -208,33 +302,57 @@ def build_report(state, close_df, names):
     holding = f"底仓 {BASE_W:.0%} {names[BASE_ETF]} + " + (f"轮动 {names.get(code, code)}" if code else "现金")
     sm = calc_metrics(nav_df.set_index("date")["nav"])
 
-    fig = make_subplots(
-        rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.12,
-        row_heights=[0.6, 0.4],
-        subplot_titles=("模拟盘净值", "轮动仓持仓标的"),
-    )
-    fig.add_trace(go.Scatter(x=nav_df["date"], y=nav_df["nav"], mode="lines",
-                             name="策略净值", line=dict(width=2)), row=1, col=1)
-    hold_df = pd.DataFrame(trades)
-    if len(hold_df) > 0:
-        for code_h, grp in hold_df.groupby("code"):
-            if code_h is None:
-                continue
-            grp = grp.sort_values("date")
-            for _, tr in grp.iterrows():
-                fig.add_trace(go.Scatter(
-                    x=[tr["date"]], y=[1], mode="markers",
-                    name=names.get(code_h, code_h), showlegend=False,
-                    marker=dict(size=10)), row=2, col=1)
-    fig.update_layout(
-        title_text=f"行业ETF轮动策略模拟盘<br><sup>"
-                   f"底仓{BASE_W:.0%} {names[BASE_ETF]} | 轮动 MA{MA_N}/动量{LOOKBACK}/每{REBAL}日/止损{TRAIL:.0%} | "
-                   f"起始 {state['start']} ~ {today}</sup>",
-        height=700,
-    )
-    html = fig.to_html(include_plotlyjs="cdn", full_html=True)
+    # 轮动仓持仓区间: 由交易记录推出每段买->卖
+    dates = nav_df["date"].tolist()
+    n = len(dates)
+    segments = []
+    open_seg = None
+    for t in trades:
+        if t["action"] in ("buy", "switch") and t["code"]:
+            open_seg = {"code": t["code"], "name": names.get(t["code"], t["code"]),
+                        "start": t["date"]}
+        elif t["action"] == "sell" and open_seg:
+            segments.append((open_seg, t["date"]))
+            open_seg = None
+    if open_seg:
+        segments.append((open_seg, today))
+    palette = ["#636efa", "#ef553b", "#00cc96", "#ab63fa", "#ffa15a",
+               "#19d3f3", "#ff6692", "#b6e880", "#ff97ff", "#fecb52"]
+    code_color = {}
+    for i, c in enumerate(sorted({s["code"] for s, _ in segments})):
+        code_color[c] = palette[i % len(palette)]
+    segs = []
+    for s, end in segments:
+        data = [0] * n
+        i0, i1 = dates.index(s["start"]), dates.index(end)
+        for i in range(i0, i1 + 1):
+            data[i] = 1
+        segs.append({"name": s["name"], "color": code_color[s["code"]], "data": data})
 
-    trades_since = [t for t in trades if t["date"] >= state["start"]]
+    ACTION_LABEL = {"buy": "买入", "sell": "卖出", "switch": "切换"}
+    trades_since = [
+        {"date": t["date"], "label": ACTION_LABEL.get(t["action"], t["action"]),
+         "kind": t["action"], "name": names.get(t["code"], "-") if t["code"] else "-",
+         "reason": t["reason"]}
+        for t in trades if t["date"] >= state["start"]
+    ]
+    metrics_txt = (f"自起始收益 {sm['total_return']:.1f}% | 年化 {sm['annual_return']:.1f}% | "
+                   f"夏普 {sm['sharpe']:.2f} | 最大回撤 {sm['max_drawdown']:.1f}%") if sm else "-"
+    data = {
+        "dates": dates, "navs": [round(x, 4) for x in nav_df["nav"].tolist()], "segs": segs,
+        "trades": trades_since,
+        "meta": {
+            "holding": holding, "action": action_txt, "nav": f"{nav_now:.4f}",
+            "ret": f"{sm['total_return']:.1f}%" if sm else "-",
+            "sub": (f"底仓 {BASE_W:.0%} {names[BASE_ETF]} | 轮动 MA{MA_N}/动量{LOOKBACK}/每{REBAL}日/止损{TRAIL:.0%} | "
+                    f"起始 {state['start']} ~ {today}"),
+            "metrics": metrics_txt,
+        },
+    }
+    html = HTML_TEMPLATE.replace("__DATA__", json.dumps(data, ensure_ascii=False))
+    with open(os.path.join(REPORT_DIR, "index.html"), "w", encoding="utf-8") as f:
+        f.write(html)
+
     summary_lines = []
     summary_lines.append("## 模拟盘状态")
     summary_lines.append(f"- 日期: {today}")
@@ -250,10 +368,7 @@ def build_report(state, close_df, names):
         summary_lines.append("| 日期 | 操作 | 标的 | 原因 |")
         summary_lines.append("|---|---|---|---|")
         for t in trades_since:
-            summary_lines.append(f"| {t['date']} | {t['action']} | {names.get(t['code'], '-') if t['code'] else '-'} | {t['reason']} |")
-
-    with open(os.path.join(REPORT_DIR, "index.html"), "w", encoding="utf-8") as f:
-        f.write(html)
+            summary_lines.append(f"| {t['date']} | {t['label']} | {t['name']} | {t['reason']} |")
     return "\n".join(summary_lines)
 
 
