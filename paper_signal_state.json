@@ -3,7 +3,7 @@
   "nav_history": [
     {
       "date": "2026-08-03",
-      "nav": 0.9998
+      "nav": 1.0032
     }
   ],
   "trades": [
@@ -12,7 +12,7 @@
       "action": "buy",
       "code": "159502",
       "reason": "new",
-      "mom": 28.8
+      "mom": 30.7
     }
   ]
 }
