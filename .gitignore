@@ -40,3 +40,13 @@ sweep_*.csv
 sweep_*.html
 etf_rot_sweep_*.csv
 etf_rot_sweep_*.html
+etf_rot_abtest_*.csv
+*.log
+.env
+
+# 本地研报资料 (付费 PDF 原文, 不进公开仓库)
+research/
+
+# 移出跟踪的废弃文件 (保留本地)
+src/
+cache_bt/etf510300.json
