@@ -1,4 +1,5 @@
 name: paper-trade
+# paper trading daily run
 
 on:
   schedule:
