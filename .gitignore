@@ -45,7 +45,7 @@ etf_rot_abtest_*.csv
 .env
 
 # 本地研报资料 (付费 PDF 原文, 不进公开仓库)
-research/
+research/**/*.pdf
 
 # 移出跟踪的废弃文件 (保留本地)
 src/
