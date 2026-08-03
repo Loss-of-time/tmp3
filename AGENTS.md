@@ -1,5 +1,9 @@
 # 自用选股器
 
+## 凭据
+
+- GitHub token 等存于仓库根目录 `.env`（已被 .gitignore 忽略，勿提交）。需要调 GitHub API（如触发 workflow_dispatch）时 `source .env` 取 `GITHUB_TOKEN`。
+
 ## 参考资料：v5 同类量化研报 (`research/v5_reports/`)
 
 收集与 v5 行业ETF轮动策略相似的量化报告，供后续策略迭代参考。PDF 已转 markdown 便于 AI 阅读：
