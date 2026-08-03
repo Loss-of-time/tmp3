@@ -35,6 +35,7 @@
 - **双动量/汉斯评分均失败**（`etf_rot_signal_filter.py` 模式 G/H/I）：给短期动量加权（score=mom+w×mom20）或回归斜率×R² 反而变差（15.7%/17.1%/nan），因为白酒/新能车等最佳入场形态恰是"长动量高+短期刚回调"，短期权重误杀历史大牛（2021 +31.7%→+6.8%）。**结论：长动量选行业 + 短回调入场就该买"短期刚跌"的强势标的，任何短期过滤都干扰**；唯一有效的是 E（不接飞刀）——只拦距自身 60 日峰回撤≥TRAIL 的候选，不动动量排序
 - 滚动回测 `etf_rot_signal_rolling.py`：none vs E 窗口统计完全相同（64 窗口、跑赢基准 61、年化中位 28.2%），因 E 只改 2026-07 后的接飞刀行为，历史路径零干扰 → 验证 E 不靠"重写历史"刷高
 - 运行产物（`etf_rot_rolling_*`/`etf_rot_signal_result_*`/`etf_rot_signal_trades_*`/`etf_rot_signal_rolling_*`）已加入 .gitignore，不入库
+- **对比基准**：沪深300太弱，改用纳指 + 上证（`cache_bt/ixic.json` akshare 全量重拉 / `cache_bt/sh000001.json` 腾讯增量），回测/模拟盘均对比这两个；策略 26.6% vs 纳指 17.6% vs 上证 3.4%
 
 ## v7 模拟盘 (`paper_trade_signal.py`)
 
