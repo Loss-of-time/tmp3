@@ -31,13 +31,13 @@ jobs:
           pip install --quiet akshare baostock pandas plotly
 
       - name: Run paper trading
-        run: python3 -u paper_trade.py
+        run: python3 -u paper_trade_signal.py
 
       - name: Commit state + report
         run: |
           git config user.name "paper-bot"
           git config user.email "paper-bot@users.noreply.github.com"
-          git add paper_state.json docs cache_bt/etf_industry
+          git add paper_signal_state.json docs cache_bt/etf_industry cache_bt/hs300.json
           if git diff --cached --quiet; then
             echo "no changes"
           else
