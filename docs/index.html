@@ -56,9 +56,9 @@
     <div class="card"><span>年化</span><b id="ann"></b></div>
     <div class="card"><span>最大回撤</span><b id="dd"></b></div>
     <div class="card"><span>夏普</span><b id="sharpe"></b></div>
-    <div class="card"><span>沪深300自起始</span><b id="bench"></b></div>
+    <div class="card"><span>纳指自起始</span><b id="bench"></b></div>
   </div>
-  <div class="panel"><h3>策略净值 vs 沪深300</h3><div id="chart"></div></div>
+  <div class="panel"><h3>策略净值 vs 纳指/上证</h3><div id="chart"></div></div>
   <div class="grid2">
     <div class="panel">
       <h3>今日信号</h3>
@@ -75,7 +75,7 @@
     <tbody id="trades"></tbody></table>
   </div>
 </div>
-<script id="data" type="application/json">{"dates": ["2026-08-03"], "navs": [0.9998], "benchs": [1.0], "segs": [{"name": "红利ETF", "color": "#636efa", "data": [1]}], "trades": [{"date": "2026-08-03", "label": "买入", "kind": "buy", "name": "红利ETF", "reason": "new"}], "holding": {"empty": false, "name": "红利ETF", "mom": 0.033343818810946946, "days": 1, "cash_pct": 0}, "signals": [{"txt": "今日buy 红利ETF", "pill": ""}], "ranking": [{"name": "红利ETF", "mom": 0.033343818810946946, "hold": true, "cool": false}, {"name": "电力", "mom": 0.005555555555555536, "hold": false, "cool": false}], "meta": {"nav": "0.9998", "ret": "+0.0%", "ann": "+0.0%", "dd": "-0.0%", "sharpe": "0.00", "bench": "+0.0%", "sub": "起始 2026-08-03 ~ 2026-08-03 · 当前: 底仓 45% 红利低波 + 红利ETF · 今日buy 红利ETF", "rule": "每日信号检视 | MA200牛熊线 | 动量180日 | 动量差&gt;100%才切 | 止损20% | 冷却20日 | 底仓45%"}}</script>
+<script id="data" type="application/json">{"dates": ["2026-08-03"], "navs": [0.9998], "benchs": {"ixic": [1.0], "sse": [1.0]}, "segs": [{"name": "红利ETF", "color": "#636efa", "data": [1]}], "trades": [{"date": "2026-08-03", "label": "买入", "kind": "buy", "name": "红利ETF", "reason": "new"}], "holding": {"empty": false, "name": "红利ETF", "mom": 0.033343818810946946, "days": 1, "cash_pct": 0}, "signals": [{"txt": "今日buy 红利ETF", "pill": ""}], "ranking": [{"name": "红利ETF", "mom": 0.033343818810946946, "hold": true, "cool": false}, {"name": "电力", "mom": 0.005555555555555536, "hold": false, "cool": false}], "meta": {"nav": "0.9998", "ret": "+0.0%", "ann": "+0.0%", "dd": "-0.0%", "sharpe": "0.00", "bench": "+0.0%", "sub": "起始 2026-08-03 ~ 2026-08-03 · 当前: 底仓 45% 红利低波 + 红利ETF · 今日buy 红利ETF", "rule": "每日信号检视 | MA200牛熊线 | 动量180日 | 动量差&gt;100%才切 | 止损20% | 冷却20日 | 底仓45%"}}</script>
 <script>
 const D = JSON.parse(document.getElementById('data').textContent);
 const $ = id => document.getElementById(id);
@@ -148,8 +148,10 @@ chart.setOption({
      lineStyle:{width:2.5, color:'#636efa'},
      areaStyle:{color:'#636efa', opacity:0.10},
      markPoint:{data:marks}},
-    {name:'沪深300', type:'line', data:D.benchs, smooth:true, showSymbol:false,
+    {name:'纳指', type:'line', data:D.benchs.ixic, smooth:true, showSymbol:false,
      lineStyle:{width:1.5, color:'#f59e0b', dash:[5,4]}},
+    {name:'上证', type:'line', data:D.benchs.sse, smooth:true, showSymbol:false,
+     lineStyle:{width:1.5, color:'#22d3ee', dash:[5,4]}},
     ...D.segs.map(s => ({
       name:s.name, type:'bar', stack:'rot', data:s.data,
       xAxisIndex:1, yAxisIndex:1, barWidth:'70%',

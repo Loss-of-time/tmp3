@@ -44,6 +44,7 @@ CASH_APR = 0.02
 
 ETFS_DIR = "cache_bt/etf_industry"
 HS300_CACHE = "cache_bt/hs300.json"
+BENCHES = {"纳指": "cache_bt/ixic.json", "上证": "cache_bt/sh000001.json"}
 
 
 def load_data():
@@ -54,6 +55,15 @@ def load_data():
     hs300 = json.load(open(HS300_CACHE))
     hs300_s = pd.Series(hs300["close"], index=pd.to_datetime(hs300["dates"])).sort_index()
     return etfs, hs300_s
+
+
+def load_benches():
+    """返回对比基准: {名称: pd.Series} (纳指 + 上证, 替代沪深300)。"""
+    out = {}
+    for name, path in BENCHES.items():
+        d = json.load(open(path))
+        out[name] = pd.Series(d["close"], index=pd.to_datetime(d["dates"])).sort_index()
+    return out
 
 
 def rotation_backtest(close_df, bt_start=BT_START, ma_n=MA_N, lookback=LOOKBACK,
@@ -145,7 +155,8 @@ def rotation_backtest(close_df, bt_start=BT_START, ma_n=MA_N, lookback=LOOKBACK,
     return values, trades
 
 
-def plot_results(sv, bv, trades, names, timestamp):
+def plot_results(sv, benchs, trades, names, timestamp):
+    """benchs: {名称: 归一化Series}"""
     fig = make_subplots(
         rows=3, cols=2,
         subplot_titles=("净值曲线", "年度收益对比", "持仓标的", "策略指标"),
@@ -154,17 +165,22 @@ def plot_results(sv, bv, trades, names, timestamp):
     )
 
     sv = sv / sv.iloc[0]
-    bv = bv / bv.iloc[0]
     fig.add_trace(go.Scatter(x=sv.index, y=sv, mode="lines", name="策略",
                              line=dict(color="steelblue", width=2)), row=1, col=1)
-    fig.add_trace(go.Scatter(x=bv.index, y=bv, mode="lines", name="沪深300",
-                             line=dict(color="coral", width=1.5, dash="dash")), row=1, col=1)
+    bench_colors = ["coral", "seagreen"]
+    for k, (name, bv) in enumerate(benchs.items()):
+        bv = bv / bv.iloc[0]
+        fig.add_trace(go.Scatter(x=bv.index, y=bv, mode="lines", name=name,
+                                 line=dict(color=bench_colors[k % 2], width=1.5,
+                                           dash="dash")), row=1, col=1)
 
     sy = sv.resample("YE").last().pct_change().dropna() * 100
-    by_ = bv.resample("YE").last().pct_change().dropna() * 100
     years_labels = [str(d.year) for d in sy.index]
     fig.add_trace(go.Bar(x=years_labels, y=sy.values, name="策略", marker_color="steelblue"), row=2, col=1)
-    fig.add_trace(go.Bar(x=years_labels, y=by_.values, name="沪深300", marker_color="coral", opacity=0.7), row=2, col=1)
+    for k, (name, bv) in enumerate(benchs.items()):
+        by_ = bv.resample("YE").last().pct_change().dropna() * 100
+        fig.add_trace(go.Bar(x=years_labels, y=by_.values, name=name,
+                             marker_color=bench_colors[k % 2], opacity=0.7), row=2, col=1)
 
     holds = []
     cur = None
@@ -189,19 +205,23 @@ def plot_results(sv, bv, trades, names, timestamp):
         ), row=3, col=1)
 
     sm = calc_metrics(sv)
-    bm = calc_metrics(bv)
     n_buy = sum(1 for t in trades if t["action"] == "buy")
     n_switch = sum(1 for t in trades if t["action"] == "switch")
 
+    bench_cols = []
+    for name, bv in benchs.items():
+        bm = calc_metrics(bv)
+        bench_cols.append([f"{bm.get('annual_return',0):.1f}", f"{bm.get('sharpe',0):.2f}",
+                           f"{bm.get('max_drawdown',0):.1f}", f"{bm.get('total_return',0):.1f}",
+                           "-", "-", "-"])
     fig.add_trace(go.Table(
-        header=dict(values=["指标", "策略", "沪深300"]),
+        header=dict(values=["指标", "策略", *[n for n, _ in benchs.items()]]),
         cells=dict(values=[
             ["年化收益 %", "夏普", "最大回撤 %", "总收益 %", "买入次数", "切换次数", "轮动仓"],
             [f"{sm.get('annual_return',0):.1f}", f"{sm.get('sharpe',0):.2f}",
              f"{sm.get('max_drawdown',0):.1f}", f"{sm.get('total_return',0):.1f}",
              f"{n_buy}", f"{n_switch}", f"{int((1-BASE_W)*100)}%"],
-            [f"{bm.get('annual_return',0):.1f}", f"{bm.get('sharpe',0):.2f}",
-             f"{bm.get('max_drawdown',0):.1f}", f"{bm.get('total_return',0):.1f}", "-", "-", "-"],
+            *bench_cols,
         ]),
     ), row=3, col=2)
 
@@ -221,7 +241,7 @@ def plot_results(sv, bv, trades, names, timestamp):
 def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     print("[1/2] 读取缓存...")
-    etfs, hs300_s = load_data()
+    etfs, _ = load_data()
     close_df = pd.DataFrame(etfs).sort_index().ffill()
     names = {json.load(open(f))["code"]: json.load(open(f))["name"]
              for f in glob.glob(os.path.join(ETFS_DIR, "*.json"))}
@@ -231,27 +251,34 @@ def main():
           f"止损{TRAIL:.0%}, 底仓{BASE_W:.0%})...")
     values, trades = rotation_backtest(close_df)
 
-    hs300_s = hs300_s.reindex(values.index).ffill()
-    common = values.dropna().index.intersection(hs300_s.dropna().index)
+    benches = {}
+    for name, s in load_benches().items():
+        s = s.dropna().reindex(values.index, method="ffill").dropna()
+        common = values.dropna().index.intersection(s.index)
+        benches[name] = s.reindex(common).ffill() if len(common) else None
+    common = values.dropna().index
     sv = values.reindex(common).ffill()
-    bv = hs300_s.reindex(common).ffill()
+    benches = {k: v for k, v in benches.items() if v is not None}
 
     sm = calc_metrics(sv)
-    bm = calc_metrics(bv)
     n_buy = sum(1 for t in trades if t["action"] == "buy")
     n_switch = sum(1 for t in trades if t["action"] == "switch")
 
     print("\n--- 回测结果 ---")
     print(f"      策略年化收益: {sm['annual_return']:.1f}%")
-    print(f"      沪深300年化收益: {bm['annual_return']:.1f}%")
+    for name, bv in benches.items():
+        bm = calc_metrics(bv)
+        print(f"      {name}年化收益: {bm['annual_return']:.1f}%")
     print(f"      策略夏普: {sm['sharpe']:.2f}")
     print(f"      策略最大回撤: {sm['max_drawdown']:.1f}%")
     print(f"      总收益: {sm['total_return']:.1f}%")
     print(f"      买入 {n_buy} 次, 切换 {n_switch} 次")
 
     csv_file = f"etf_rot_signal_result_{timestamp}.csv"
-    pd.DataFrame({"date": sv.index, "strategy": sv.values, "hs300": bv.values}).to_csv(
-        csv_file, index=False, encoding="utf-8-sig")
+    df_out = {"date": sv.index, "strategy": sv.values}
+    for name, bv in benches.items():
+        df_out[name] = bv.values
+    pd.DataFrame(df_out).to_csv(csv_file, index=False, encoding="utf-8-sig")
     print(f"      CSV -> {csv_file}")
 
     if trades:
@@ -261,7 +288,7 @@ def main():
 
     html_file = f"etf_rot_signal_result_{timestamp}.html"
     with open(html_file, "w", encoding="utf-8") as f:
-        f.write(plot_results(sv, bv, trades, names, timestamp))
+        f.write(plot_results(sv, benches, trades, names, timestamp))
     print(f"      HTML -> {html_file}")
     print("\n完成.")
 

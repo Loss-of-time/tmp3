@@ -31,8 +31,57 @@ STATE_FILE = "paper_signal_state.json"
 REPORT_DIR = "docs"
 NAV_FILE = os.path.join(REPORT_DIR, "data", "nav.json")
 HS300_CACHE = "cache_bt/hs300.json"
+BENCH_CACHES = {
+    "纳指": "cache_bt/ixic.json",
+    "上证": "cache_bt/sh000001.json",
+}
 
 ALL_ETFS = {**ETFS, **NEW_ETFS, **LOWVOL}
+
+
+def _tencent_fetch(code, start, end):
+    import urllib.request
+
+    url = (f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
+           f"?param={code},day,{start},{end},640,qfq")
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    j = json.load(urllib.request.urlopen(req, timeout=15))
+    day = j["data"][code].get("day") or j["data"][code].get("qfqday")
+    return [(r[0], round(float(r[2]), 4)) for r in day]
+
+
+def update_bench():
+    """增量更新对比基准: 纳指(akshare 全量重拉) + 上证(腾讯增量)。失败用旧缓存。"""
+    # 上证: 腾讯增量
+    try:
+        d = json.load(open(BENCH_CACHES["上证"]))
+        last = d["dates"][-1]
+        start = (pd.Timestamp(last) - pd.Timedelta(days=10)).strftime("%Y-%m-%d")
+        end = date.today().strftime("%Y-%m-%d")
+        rows = _tencent_fetch("sh000001", start, end)
+        new_dates = [ts for ts, _ in rows]
+        new_close = [c for _, c in rows]
+        keep_mask = [ts > last for ts in new_dates]
+        d["dates"] += [x for x, k in zip(new_dates, keep_mask) if k]
+        d["close"] += [x for x, k in zip(new_close, keep_mask) if k]
+        with open(BENCH_CACHES["上证"], "w") as fh:
+            json.dump(d, fh, ensure_ascii=False)
+        print(f"上证: +{sum(keep_mask)} 行 (至 {d['dates'][-1]})")
+    except Exception as e:
+        print(f"上证 更新失败, 用旧缓存: {str(e)[:80]}")
+
+    # 纳指: akshare 全量重拉覆盖
+    try:
+        import akshare as ak
+        df = ak.index_us_stock_sina(symbol=".IXIC")
+        d = {"code": "usIXIC",
+             "dates": [str(x) for x in df["date"]],
+             "close": [round(float(x), 4) for x in df["close"]]}
+        with open(BENCH_CACHES["纳指"], "w") as fh:
+            json.dump(d, fh, ensure_ascii=False)
+        print(f"纳指: 全量 {len(d['dates'])} 行 (至 {d['dates'][-1]})")
+    except Exception as e:
+        print(f"纳指 更新失败, 用旧缓存: {str(e)[:80]}")
 
 
 def update_hs300():
@@ -120,9 +169,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div class="card"><span>年化</span><b id="ann"></b></div>
     <div class="card"><span>最大回撤</span><b id="dd"></b></div>
     <div class="card"><span>夏普</span><b id="sharpe"></b></div>
-    <div class="card"><span>沪深300自起始</span><b id="bench"></b></div>
+    <div class="card"><span>纳指自起始</span><b id="bench"></b></div>
   </div>
-  <div class="panel"><h3>策略净值 vs 沪深300</h3><div id="chart"></div></div>
+  <div class="panel"><h3>策略净值 vs 纳指/上证</h3><div id="chart"></div></div>
   <div class="grid2">
     <div class="panel">
       <h3>今日信号</h3>
@@ -212,8 +261,10 @@ chart.setOption({
      lineStyle:{width:2.5, color:'#636efa'},
      areaStyle:{color:'#636efa', opacity:0.10},
      markPoint:{data:marks}},
-    {name:'沪深300', type:'line', data:D.benchs, smooth:true, showSymbol:false,
+    {name:'纳指', type:'line', data:D.benchs.ixic, smooth:true, showSymbol:false,
      lineStyle:{width:1.5, color:'#f59e0b', dash:[5,4]}},
+    {name:'上证', type:'line', data:D.benchs.sse, smooth:true, showSymbol:false,
+     lineStyle:{width:1.5, color:'#22d3ee', dash:[5,4]}},
     ...D.segs.map(s => ({
       name:s.name, type:'bar', stack:'rot', data:s.data,
       xAxisIndex:1, yAxisIndex:1, barWidth:'70%',
@@ -374,7 +425,7 @@ def simulate(state, close_df):
     return state, today_signal
 
 
-def build_report(state, today_signal, close_df, names, hs300_s):
+def build_report(state, today_signal, close_df, names, bench_series):
     os.makedirs(os.path.join(REPORT_DIR, "data"), exist_ok=True)
     nav_df = pd.DataFrame(state["nav_history"])
     nav_df.to_json(NAV_FILE, orient="records")
@@ -403,10 +454,12 @@ def build_report(state, today_signal, close_df, names, hs300_s):
         sm = {"total_return": 0.0, "annual_return": 0.0,
               "max_drawdown": 0.0, "sharpe": 0.0}
 
-    # 基准归一化到起始日
+    # 基准归一化到起始日: bench_series = {名称: Series}
     common = nav_df["date"].tolist()
-    hs = hs300_s.reindex(pd.to_datetime(common)).ffill()
-    benchs = (hs / hs.iloc[0]).round(4).tolist() if len(hs) else []
+    benchs = {}
+    for name, s in bench_series.items():
+        hs = s.dropna().reindex(pd.to_datetime(common), method="ffill")
+        benchs[name] = (hs / hs.iloc[0]).round(4).tolist() if len(hs) else []
 
     # 持仓区间
     dates = common
@@ -462,10 +515,11 @@ def build_report(state, today_signal, close_df, names, hs300_s):
         for t in trades if t["date"] >= state["start"]
     ]
 
-    bench_ret = (benchs[-1] - 1) * 100
+    bench_ret = (benchs["纳指"][-1] - 1) * 100 if benchs.get("纳指") else 0.0
     data = {
         "dates": dates, "navs": [round(x, 4) for x in nav_df["nav"].tolist()],
-        "benchs": benchs, "segs": segs, "trades": trades_since,
+        "benchs": {"ixic": benchs.get("纳指", []), "sse": benchs.get("上证", [])},
+        "segs": segs, "trades": trades_since,
         "holding": hd, "signals": signals, "ranking": ranking,
         "meta": {
             "nav": f"{nav_now:.4f}", "ret": f"{sm['total_return']:+.1f}%",
@@ -486,7 +540,7 @@ def build_report(state, today_signal, close_df, names, hs300_s):
               f"- 净值: {nav_now:.4f}",
               f"- 自起始({state['start']})收益: {sm['total_return']:+.1f}% 年化: {sm['annual_return']:+.1f}%",
               f"- 夏普: {sm['sharpe']:.2f} 最大回撤: {sm['max_drawdown']:.1f}%",
-              f"- 沪深300自起始: {bench_ret:+.1f}%"]
+              f"- 纳指自起始: {bench_ret:+.1f}%"]
     if trades_since:
         lines += ["", "### 交易记录", "| 日期 | 操作 | 标的 | 原因 |", "|---|---|---|---|"]
         lines += [f"| {t['date']} | {t['label']} | {t['name']} | {t['reason']} |" for t in trades_since]
@@ -495,14 +549,16 @@ def build_report(state, today_signal, close_df, names, hs300_s):
 
 def main():
     close_df, names = load_close_df()
-    update_hs300()
-    hs300 = json.load(open(HS300_CACHE))
-    hs300_s = pd.Series(hs300["close"], index=pd.to_datetime(hs300["dates"])).sort_index()
+    update_bench()
+    bench_series = {}
+    for name, path in BENCH_CACHES.items():
+        d = json.load(open(path))
+        bench_series[name] = pd.Series(d["close"], index=pd.to_datetime(d["dates"])).sort_index()
     print(f"数据: {len(close_df)} 个交易日, {len(close_df.columns)} 只")
     state = load_state()
     state, today_signal = simulate(state, close_df)
     save_state(state)
-    report = build_report(state, today_signal, close_df, names, hs300_s)
+    report = build_report(state, today_signal, close_df, names, bench_series)
     print(report)
     print(f"\n报告 -> {os.path.join(REPORT_DIR, 'index.html')}")
 

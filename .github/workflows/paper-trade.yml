@@ -37,7 +37,7 @@ jobs:
         run: |
           git config user.name "paper-bot"
           git config user.email "paper-bot@users.noreply.github.com"
-          git add paper_signal_state.json docs cache_bt/etf_industry cache_bt/hs300.json
+          git add paper_signal_state.json docs cache_bt/etf_industry cache_bt/hs300.json cache_bt/ixic.json cache_bt/sh000001.json
           if git diff --cached --quiet; then
             echo "no changes"
           else
