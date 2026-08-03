@@ -22,13 +22,13 @@ from etf_rotation import (
     MA_N, LOOKBACK, REBAL, TRAIL, BASE_W, BASE_ETF, CASH_APR,
     COMMISSION, ETFS_DIR,
 )
-from fetch_etf_industry import ETFS, LOWVOL
+from fetch_etf_industry import ETFS, NEW_ETFS, LOWVOL
 
 STATE_FILE = "paper_state.json"
 REPORT_DIR = "docs"
 NAV_FILE = os.path.join(REPORT_DIR, "data", "nav.json")
 
-ALL_ETFS = {**ETFS, **LOWVOL}
+ALL_ETFS = {**ETFS, **NEW_ETFS, **LOWVOL}
 
 
 HTML_TEMPLATE = """<!DOCTYPE html>
@@ -157,19 +157,29 @@ def load_close_df():
 
 
 def incremental_fetch(code, name, retries=12, pause=15):
-    """从缓存最后日期往前推 10 天重新拉取, 覆盖重叠区后追加, 保证 qfq 拼接一致。"""
+    """从缓存最后日期往前推 10 天重新拉取, 覆盖重叠区后追加, 保证 qfq 拼接一致。
+
+    数据源: 腾讯 fqkline (东财 push2his 2026-08 起不可用)。
+    """
+    import urllib.request
+
+    from fetch_etf_industry import _tencent_page
+
     f = os.path.join(ETFS_DIR, f"{code}.json")
-    import akshare as ak
     d = json.load(open(f))
     last = d["dates"][-1]
-    start = (pd.Timestamp(last) - pd.Timedelta(days=10)).strftime("%Y%m%d")
-    end = date.today().strftime("%Y%m%d")
+    start = (pd.Timestamp(last) - pd.Timedelta(days=10)).strftime("%Y-%m-%d")
+    end = date.today().strftime("%Y-%m-%d")
     for attempt in range(retries):
         try:
-            df = ak.fund_etf_hist_em(symbol=code, period="daily",
-                                     start_date=start, end_date=end, adjust="qfq")
-            new_dates = df["日期"].astype(str).tolist()
-            new_close = [round(float(x), 4) for x in df["收盘"]]
+            pref = ("sz" if code.startswith("1") else "sh") + code
+            url = (f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
+                   f"?param={pref},day,{start},{end},640,qfq")
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            j = json.load(urllib.request.urlopen(req, timeout=15))
+            day = j["data"][pref].get("day") or j["data"][pref].get("qfqday")
+            new_dates = [r[0] for r in day]
+            new_close = [round(float(r[2]), 4) for r in day]
             keep_mask = [ts > last for ts in new_dates]
             merged_dates = d["dates"] + [x for x, k in zip(new_dates, keep_mask) if k]
             merged_close = d["close"] + [x for x, k in zip(new_close, keep_mask) if k]
@@ -198,28 +208,33 @@ def save_state(state):
 
 
 def simulate(state, close_df):
-    """从上次处理日的下一交易日推进模拟账户。返回更新后的 state。"""
+    """从模拟账户起始日完整重放至最新交易日。幂等：每次运行都从 start 重放,
+    状态只存起始日+当前账户, 不依赖数据框行数 (池子扩容后 i 定位会失效)。"""
     bt = close_df
     ma = bt.rolling(MA_N).mean()
     above = bt > ma
     mom = bt.pct_change(LOOKBACK)
     lowvol = bt[BASE_ETF]
 
-    first_run = state is None
-    if first_run:
-        # 模拟账户从最新交易日开始, 净值 1.0; 调仓计数器从 0 起, 首日即调仓日
+    if state is None:
+        start_date = bt.index[-1]
         state = {
-            "start": str(bt.index[-1].date()),
+            "start": str(start_date.date()),
             "base_shares": BASE_W / lowvol.iloc[-1],
             "rot_cash": 1.0 - BASE_W,
             "code": None, "shares": 0.0, "peak": 0.0,
-            "i": len(bt) - 1, "rebal": 0,
-            "last_date": None,
             "nav_history": [], "trades": [],
         }
         start_i = len(bt) - 1
     else:
-        start_i = state["i"] + 1
+        start_i = bt.index.get_indexer([pd.Timestamp(state["start"])])[0]
+        state["base_shares"] = BASE_W / lowvol.iloc[start_i]
+        state["rot_cash"] = 1.0 - BASE_W
+        state["code"] = None
+        state["shares"] = 0.0
+        state["peak"] = 0.0
+        state["nav_history"] = []
+        state["trades"] = []
 
     for i in range(start_i, len(bt)):
         date = bt.index[i]
@@ -240,7 +255,7 @@ def simulate(state, close_df):
                 state["peak"] = 0.0
                 state["trades"].append({"date": str(date.date()), "action": "sell",
                                         "code": None, "reason": reason})
-        if state["rebal"] % REBAL == 0:
+        if (i - start_i) % REBAL == 0:
             elig = [c for c in signal[signal].index if not np.isnan(mom.loc[date, c])]
             if len(elig) > 0:
                 best = mom.loc[date, elig].idxmax()
@@ -272,9 +287,6 @@ def simulate(state, close_df):
         else:
             nav = state["base_shares"] * lowvol.iloc[i] + state["rot_cash"]
         state["nav_history"].append({"date": str(date.date()), "nav": round(nav, 4)})
-        state["i"] = i
-        state["last_date"] = str(date.date())
-        state["rebal"] += 1
     return state
 
 

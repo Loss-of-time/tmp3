@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """拉取行业板块 ETF 前复权日线缓存到 cache_bt/etf_industry/。
 
-数据源: akshare 东财 (fund_etf_hist_em, adjust=qfq)。频繁限流, 失败隔 15s 重试。
+数据源: 腾讯 fqkline (qfq 前复权, 单次最多 640 行, 分页)。东财历史接口(akshare
+fund_etf_hist_em) 2026-08 曾完全不可用, 故改用腾讯; 已验证腾讯 qfq 与东财 qfq
+一致 (512000 max diff 0.001, 仅浮点舍入)。
 """
 
 import json
 import os
 import time
+import urllib.request
 
-import akshare as ak
+TENCENT_URL = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
 
 CACHE = "cache_bt/etf_industry"
 
@@ -27,6 +30,15 @@ ETFS = {
     "159995": "芯片",
 }
 
+NEW_ETFS = {
+    "562500": "机器人",
+    "518880": "黄金",
+    "516020": "化工",
+    "159928": "消费",
+    "159529": "标普消费",
+    "159611": "电力",
+}
+
 LOWVOL = {
     "512890": "红利低波",
     "510880": "红利ETF",
@@ -34,6 +46,17 @@ LOWVOL = {
 
 START = "20170101"
 END = "20260731"
+END_TX = "2026-07-31"
+
+
+def _tencent_page(code, n, end):
+    """拉一页腾讯 qfq 日线, 返回 [(date, close), ...] 升序。"""
+    pref = ("sz" if code.startswith("1") else "sh") + code
+    url = (f"{TENCENT_URL}?param={pref},day,,{end},{n},qfq")
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    d = json.load(urllib.request.urlopen(req, timeout=15))
+    day = d["data"][pref].get("day") or d["data"][pref].get("qfqday")
+    return [(r[0], round(float(r[2]), 4)) for r in day]
 
 
 def fetch(code, name):
@@ -42,12 +65,24 @@ def fetch(code, name):
         return True, "cached"
     for attempt in range(12):
         try:
-            df = ak.fund_etf_hist_em(symbol=code, period="daily",
-                                     start_date=START, end_date=END, adjust="qfq")
+            rows, end = [], END_TX
+            while True:
+                page = _tencent_page(code, 640, end)
+                rows = page + rows
+                if len(page) < 640:
+                    break
+                end = page[0][0]
+            seen = set()
+            dedup = []
+            for r in rows:
+                if r[0] not in seen:
+                    seen.add(r[0])
+                    dedup.append(r)
+            rows = dedup
             out = {
                 "code": code, "name": name,
-                "dates": df["日期"].astype(str).tolist(),
-                "close": [round(float(x), 4) for x in df["收盘"]],
+                "dates": [r[0] for r in rows],
+                "close": [r[1] for r in rows],
             }
             with open(f, "w") as fh:
                 json.dump(out, fh, ensure_ascii=False)
@@ -61,7 +96,7 @@ def fetch(code, name):
 
 def main():
     os.makedirs(CACHE, exist_ok=True)
-    for code, name in {**ETFS, **LOWVOL}.items():
+    for code, name in {**ETFS, **NEW_ETFS, **LOWVOL}.items():
         ok, msg = fetch(code, name)
         print(f"{code} {name}: {msg}")
 
