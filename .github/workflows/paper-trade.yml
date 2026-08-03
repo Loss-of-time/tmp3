@@ -28,7 +28,7 @@ jobs:
 
       - name: Install deps
         run: |
-          pip install --quiet akshare pandas plotly
+          pip install --quiet akshare baostock pandas plotly
 
       - name: Run paper trading
         run: python3 -u paper_trade.py
