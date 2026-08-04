@@ -48,6 +48,18 @@ etf_rot_signal_result_*.html
 etf_rot_signal_trades_*.csv
 etf_rot_signal_rolling_*.csv
 etf_rot_signal_rolling_*.html
+etf_rot_signal_cyb_result_*.csv
+etf_rot_signal_cyb_result_*.html
+etf_rot_signal_sweep_*.csv
+etf_cyb_result_*.csv
+etf_cyb_result_*.html
+etf_cyb_trades_*.csv
+momentum_regime_result_*.csv
+momentum_regime_result_*.html
+momentum_regime_trades_*.csv
+momentum_top5_result_*.csv
+momentum_top5_result_*.html
+momentum_top5_trades_*.csv
 *.log
 .env
 
