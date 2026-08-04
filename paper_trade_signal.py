@@ -448,20 +448,23 @@ def build_report(state, today_signal, close_df, names, bench_series):
     today = state["nav_history"][-1]["date"]
     nav_now = state["nav_history"][-1]["nav"]
 
+    def disp(c):
+        return f"{names.get(c, c)} ({c})" if c else "-"
+
     # 今日操作文案
     last_action = trades[-1] if trades else None
     if last_action and last_action["date"] == today:
         if last_action["action"] == "sell":
             action_txt = f"今日卖出（{last_action['reason']}）→ 轮动仓空仓"
         else:
-            action_txt = f"今日{last_action['action']} {names.get(last_action['code'], last_action['code'])}"
+            action_txt = f"今日{last_action['action']} {disp(last_action['code'])}"
     elif code:
-        action_txt = f"持有 {names.get(code, code)}"
+        action_txt = f"持有 {disp(code)}"
     else:
         action_txt = "轮动仓空仓（持币）"
 
-    holding = (f"底仓 {BASE_W:.0%} {names[BASE_ETF]} + "
-               f"{names.get(code, code) if code else '现金'}")
+    holding = (f"底仓 {BASE_W:.0%} {disp(BASE_ETF)} + "
+               f"{disp(code) if code else '现金'}")
     sm = calc_metrics(nav_df.set_index("date")["nav"])
     if not sm:
         sm = {"total_return": 0.0, "annual_return": 0.0,
@@ -481,7 +484,7 @@ def build_report(state, today_signal, close_df, names, bench_series):
     open_seg = None
     for t in trades:
         if t["action"] in ("buy", "switch") and t["code"]:
-            open_seg = {"code": t["code"], "name": names.get(t["code"], t["code"]),
+            open_seg = {"code": t["code"], "name": disp(t["code"]),
                         "start": t["date"]}
         elif t["action"] == "sell" and open_seg:
             segments.append((open_seg, t["date"]))
@@ -504,7 +507,7 @@ def build_report(state, today_signal, close_df, names, bench_series):
 
     # 今日信号面板
     if today_signal and today_signal["code"]:
-        hd = {"empty": False, "name": names.get(today_signal["code"], today_signal["code"]),
+        hd = {"empty": False, "name": disp(today_signal["code"]),
               "mom": today_signal["mom"], "days": today_signal["days"], "cash_pct": 0}
     else:
         hd = {"empty": True, "cash_pct": today_signal["cash_pct"] if today_signal else 1 - BASE_W}
@@ -512,18 +515,18 @@ def build_report(state, today_signal, close_df, names, bench_series):
     signals = [{"txt": sig_txt, "pill": ""}]
     if today_signal and today_signal["cooldowns"]:
         for c in today_signal["cooldowns"]:
-            signals.append({"txt": f"冷却中: {names.get(c, c)}（{COOLDOWN} 天内不买回）", "pill": "cool"})
+            signals.append({"txt": f"冷却中: {disp(c)}（{COOLDOWN} 天内不买回）", "pill": "cool"})
 
     cands = today_signal["candidates"] if today_signal else []
     ranking = []
     for c in sorted(cands, key=lambda x: -x["mom"]):
-        ranking.append({"name": names.get(c["code"], c["code"]), "mom": c["mom"],
+        ranking.append({"name": disp(c["code"]), "mom": c["mom"],
                         "hold": c["holding"], "cool": c["cool"]})
 
     ACTION_LABEL = {"buy": "买入", "sell": "卖出", "switch": "切换"}
     trades_since = [
         {"date": t["date"], "label": ACTION_LABEL.get(t["action"], t["action"]),
-         "kind": t["action"], "name": names.get(t["code"], "-") if t["code"] else "-",
+         "kind": t["action"], "name": disp(t["code"]),
          "reason": t["reason"]}
         for t in trades if t["date"] >= state["start"]
     ]

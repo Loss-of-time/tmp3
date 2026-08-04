@@ -213,9 +213,9 @@ def plot_results(sv, benchs, trades, names, timestamp):
         holds.append((cur, start, sv.index[-1]))
     for code, s, e in holds:
         fig.add_trace(go.Scatter(
-            x=[s, e], y=[names[code], names[code]],
-            mode="lines", line=dict(width=8), name=names[code], showlegend=False,
-            hovertext=[f"{names[code]}: {s.date()} ~ {e.date()}"],
+            x=[s, e], y=[f"{names[code]} {code}", f"{names[code]} {code}"],
+            mode="lines", line=dict(width=8), name=f"{names[code]} {code}", showlegend=False,
+            hovertext=[f"{names[code]} ({code}): {s.date()} ~ {e.date()}"],
         ), row=3, col=1)
 
     sm = calc_metrics(sv)
