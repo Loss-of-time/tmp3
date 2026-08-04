@@ -564,8 +564,8 @@ def build_report(state, today_signal, close_df, names, bench_series):
 
 
 def main():
-    close_df, open_df, names = load_close_df()
     update_bench()
+    close_df, open_df, names = load_close_df()
     bench_series = {}
     for name, path in BENCH_CACHES.items():
         d = json.load(open(path))

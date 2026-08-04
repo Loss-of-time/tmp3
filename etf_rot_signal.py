@@ -15,7 +15,7 @@
 - 持仓时: 若存在候选动量超过持仓 MOM_GAP 以上, 切换过去 (否则续持)
 - 不接飞刀: 距自身 60 日峰值回撤 >= TRAIL 的候选拦停 (等回撤收敛再入)
 - 每日检视 => 无相位, 起跑日平移结果不变
-- 底仓 BASE_W 恒持红利低波, 剩余做轮动; 空仓吃现金 CASH_APR
+- 底仓 BASE_W 恒持底仓标的(BASE_ETF), 剩余做轮动; 空仓吃现金 CASH_APR
 """
 
 import glob
@@ -38,7 +38,7 @@ MIN_MOM = 0.0       # 入场门槛: 动量必须 > 此值才可买入 (汉斯: �
 TRAIL = 0.20        # 移动止损: 从持仓峰值回撤此比例离场
 COOLDOWN = 20       # 冷却期: 卖出后此天数内不买回同标的 (防止损后当日买回被打脸)
 BASE_W = 0.45       # 低波底仓权重
-BASE_ETF = "512890" # 红利低波 ETF
+BASE_ETF = "513100" # 底仓标的: "512890" 红利低波 ETF, 或 "513100" 纳指ETF(溢价可接受)
 BT_START = "2020-01-01"
 CASH_APR = 0.02
 
@@ -242,7 +242,7 @@ def plot_results(sv, benchs, trades, names, timestamp):
     fig.update_layout(
         title_text=f"行业ETF信号调仓回测 ({timestamp})<br><sup>"
                    f"每日检视 | MA{MA_N}+动量{LOOKBACK}日 动量差>{MOM_GAP:.0%}才切换 | "
-                   f"低波底仓{int(BASE_W*100)}%+轮动{int((1-BASE_W)*100)}% 止损{int(TRAIL*100)}% | "
+                   f"底仓{int(BASE_W*100)}% {names[BASE_ETF]}+轮动{int((1-BASE_W)*100)}% 止损{int(TRAIL*100)}% | "
                    f"{BT_START} ~ 2026-07</sup>",
         height=1000,
     )
