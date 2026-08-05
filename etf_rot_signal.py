@@ -38,7 +38,7 @@ MIN_MOM = 0.0       # 入场门槛: 动量必须 > 此值才可买入 (汉斯: �
 TRAIL = 0.20        # 移动止损: 从持仓峰值回撤此比例离场
 COOLDOWN = 20       # 冷却期: 卖出后此天数内不买回同标的 (防止损后当日买回被打脸)
 BASE_W = 0.45       # 低波底仓权重
-BASE_ETF = "513100" # 底仓标的: "512890" 红利低波 ETF, 或 "513100" 纳指ETF(溢价可接受)
+BASE_ETF = "518880" # 底仓标的: "512890" 红利低波 / "513100" 纳指ETF(溢价可接受) / "518880" 黄金(长周期唯一单调稳健防御)
 BT_START = "2020-01-01"
 CASH_APR = 0.02
 
@@ -169,7 +169,7 @@ def rotation_backtest(close_df, open_df=None, bt_start=BT_START, ma_n=MA_N, look
     return values, trades
 
 
-def plot_results(sv, benchs, trades, names, timestamp):
+def plot_results(sv, benchs, trades, names, timestamp, title_text=None):
     """benchs: {名称: 归一化Series}"""
     fig = make_subplots(
         rows=3, cols=2,
@@ -239,11 +239,13 @@ def plot_results(sv, benchs, trades, names, timestamp):
         ]),
     ), row=3, col=2)
 
+    if title_text is None:
+        title_text = (f"行业ETF信号调仓回测 ({timestamp})<br><sup>"
+                      f"每日检视 | MA{MA_N}+动量{LOOKBACK}日 动量差>{MOM_GAP:.0%}才切换 | "
+                      f"低波底仓{int(BASE_W*100)}%+轮动{int((1-BASE_W)*100)}% 止损{int(TRAIL*100)}% | "
+                      f"{BT_START} ~ 2026-07</sup>")
     fig.update_layout(
-        title_text=f"行业ETF信号调仓回测 ({timestamp})<br><sup>"
-                   f"每日检视 | MA{MA_N}+动量{LOOKBACK}日 动量差>{MOM_GAP:.0%}才切换 | "
-                   f"底仓{int(BASE_W*100)}% {names[BASE_ETF]}+轮动{int((1-BASE_W)*100)}% 止损{int(TRAIL*100)}% | "
-                   f"{BT_START} ~ 2026-07</sup>",
+        title_text=title_text,
         height=1000,
     )
     fig.update_yaxes(title_text="净值", row=1, col=1)
