@@ -4,7 +4,7 @@ name: paper-trade
 on:
   schedule:
     # A股收盘 15:00 (UTC+8) 后运行, 留 30 分钟余量 = UTC 07:30, 周一至周五
-    - cron: '30 7 * * 1-5'
+    - cron: '47 7 * * 1-5'
   workflow_dispatch:
 
 permissions:
