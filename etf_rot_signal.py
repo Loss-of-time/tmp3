@@ -188,11 +188,15 @@ def plot_results(sv, benchs, trades, names, timestamp, title_text=None):
                                  line=dict(color=bench_colors[k % 2], width=1.5,
                                            dash="dash")), row=1, col=1)
 
-    sy = sv.resample("YE").last().pct_change().dropna() * 100
+    yr = sv.resample("YE").last()
+    sy = yr.pct_change() * 100
+    sy.iloc[0] = (yr.iloc[0] / sv.iloc[0] - 1) * 100
     years_labels = [str(d.year) for d in sy.index]
     fig.add_trace(go.Bar(x=years_labels, y=sy.values, name="策略", marker_color="steelblue"), row=2, col=1)
     for k, (name, bv) in enumerate(benchs.items()):
-        by_ = bv.resample("YE").last().pct_change().dropna() * 100
+        byr = bv.resample("YE").last()
+        by_ = byr.pct_change() * 100
+        by_.iloc[0] = (byr.iloc[0] / bv.iloc[0] - 1) * 100
         fig.add_trace(go.Bar(x=years_labels, y=by_.values, name=name,
                              marker_color=bench_colors[k % 2], opacity=0.7), row=2, col=1)
 
