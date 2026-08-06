@@ -8,6 +8,7 @@
 - 切换: 候选动量超过持仓 MOM_GAP 绝对差才切
 - 冷却: 卖出后 COOLDOWN 天内不买回同标的
 - 不接飞刀: 距自身 60 日峰值回撤 >= TRAIL 的候选拦停
+- 部分止盈: 轮动仓浮盈达 TP_HALF 卖一半落袋, 剩余仍跟 trail/趋势 (落袋现金参与下次买入)
 """
 
 import numpy as np
@@ -18,7 +19,9 @@ MA_N = 200          # 牛熊线: 只买收盘 > MA_N 的 ETF, 跌破则趋势破
 LOOKBACK = 180      # 动量窗口(交易日)
 MOM_GAP = 1.0       # 切换阈值: 候选动量超过持仓动量此比例(绝对差)才切换
 MIN_MOM = 0.0       # 入场门槛: 动量必须 > 此值才可买入
+MOM_CAP = None      # 动量上限: 180日动量 >= 此比例不买入 (None=关闭, 过热过滤实验)
 TRAIL = 0.20        # 移动止损: 从持仓峰值回撤此比例离场
+TP_HALF = 0.8       # 部分止盈: 轮动仓浮盈达此比例卖一半落袋 (None=关闭, 剩余仍跟 trail)
 COOLDOWN = 20       # 冷却期: 卖出后此天数内不买回同标的
 BASE_W = 0.45       # 底仓权重
 BASE_ETF = "518880" # 底仓标的: "512890" 红利低波 / "513100" 纳指ETF(溢价可接受) / "518880" 黄金(长周期唯一单调稳健防御)
@@ -28,7 +31,8 @@ ETFS_DIR = "cache_bt/etf_industry"
 
 
 def rotation_sim(close_df, open_df=None, *, ma_n=MA_N, lookback=LOOKBACK,
-                 mom_gap=MOM_GAP, min_mom=MIN_MOM, trail=TRAIL, cooldown=COOLDOWN,
+                 mom_gap=MOM_GAP, min_mom=MIN_MOM, mom_cap=MOM_CAP,
+                 trail=TRAIL, tp_half=TP_HALF, cooldown=COOLDOWN,
                  base_w=BASE_W, base_etf=BASE_ETF, commission=0.001, gate=True,
                  start=None, shift_full=False):
     """逐日重放 v7 轮动策略。返回 {"dates", "navs", "trades", "last"}。
@@ -74,6 +78,8 @@ def rotation_sim(close_df, open_df=None, *, ma_n=MA_N, lookback=LOOKBACK,
     shares = 0.0
     code = None
     peak = 0.0
+    cost = 0.0
+    half_done = False
     last_sell = {}
     trades = []
     dates, navs = [], []
@@ -99,12 +105,21 @@ def rotation_sim(close_df, open_df=None, *, ma_n=MA_N, lookback=LOOKBACK,
                 shares = 0.0
                 code = None
                 peak = 0.0
+                half_done = False
                 day_trades.append({"date": date, "action": "sell", "code": None,
                                    "reason": reason})
+            elif tp_half and not half_done and px >= cost * (1 + tp_half):
+                exec_px = fill.loc[date, code]
+                rot_cash += shares * 0.5 * exec_px * (1 - commission)
+                shares *= 0.5
+                half_done = True
+                day_trades.append({"date": date, "action": "tp_half", "code": code,
+                                   "reason": f"浮盈{tp_half:.0%}卖半"})
 
         # 每日信号检视 (昨日收盘信号)
         elig = [c for c in signal[signal].index
                 if not np.isnan(mom.loc[date, c]) and mom.loc[date, c] > min_mom
+                and (mom_cap is None or mom.loc[date, c] < mom_cap)
                 and (cooldown == 0 or i - last_sell.get(c, -10**9) > cooldown)]
         # 不接飞刀: 距自身近期峰值(60日)回撤 >= TRAIL 的候选视为刚崩, 拦停
         if elig:
@@ -118,6 +133,8 @@ def rotation_sim(close_df, open_df=None, *, ma_n=MA_N, lookback=LOOKBACK,
                 rot_cash -= target + target * commission
                 code = best
                 peak = best_px
+                cost = best_px
+                half_done = False
                 day_trades.append({"date": date, "action": "buy", "code": best,
                                    "reason": "new",
                                    "mom": round(float(mom.loc[date, best]) * 100, 1)})
@@ -134,6 +151,8 @@ def rotation_sim(close_df, open_df=None, *, ma_n=MA_N, lookback=LOOKBACK,
                     rot_cash -= target + target * commission
                     code = best
                     peak = best_px
+                    cost = best_px
+                    half_done = False
                     day_trades.append({"date": date, "action": "switch", "code": best,
                                        "reason": f"换 {old}",
                                        "mom": round(float(best_mom) * 100, 1)})
