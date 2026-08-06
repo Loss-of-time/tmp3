@@ -29,20 +29,9 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from backtest import COMMISSION, calc_metrics
+from rot_core import (MA_N, LOOKBACK, MOM_GAP, MIN_MOM, TRAIL, COOLDOWN, BASE_W,
+                      BASE_ETF, BT_START, CASH_APR, ETFS_DIR, rotation_sim)
 
-# --- config ---
-MA_N = 200          # 牛熊线: 只买收盘 > MA_N 的 ETF, 跌破则趋势破坏离场
-LOOKBACK = 180      # 动量窗口(交易日)
-MOM_GAP = 1.0       # 切换阈值: 候选动量超过持仓动量此比例(绝对差)才切换
-MIN_MOM = 0.0       # 入场门槛: 动量必须 > 此值才可买入 (汉斯: 得分>0)
-TRAIL = 0.20        # 移动止损: 从持仓峰值回撤此比例离场
-COOLDOWN = 20       # 冷却期: 卖出后此天数内不买回同标的 (防止损后当日买回被打脸)
-BASE_W = 0.45       # 低波底仓权重
-BASE_ETF = "518880" # 底仓标的: "512890" 红利低波 / "513100" 纳指ETF(溢价可接受) / "518880" 黄金(长周期唯一单调稳健防御)
-BT_START = "2015-01-01"
-CASH_APR = 0.02
-
-ETFS_DIR = "cache_bt/etf_industry"
 HS300_CACHE = "cache_bt/hs300.json"
 BENCHES = {"纳指": "cache_bt/ixic.json", "上证": "cache_bt/sh000001.json"}
 
@@ -71,102 +60,19 @@ def load_benches():
 
 def rotation_backtest(close_df, open_df=None, bt_start=BT_START, ma_n=MA_N, lookback=LOOKBACK,
                       mom_gap=MOM_GAP, min_mom=MIN_MOM, trail=TRAIL,
-                      base_w=BASE_W, base_etf=BASE_ETF, cooldown=COOLDOWN):
+                      base_w=BASE_W, base_etf=BASE_ETF, cooldown=COOLDOWN,
+                      gate=True):
     """信号调仓回测。返回 (values, trades)。
 
     成交模型: 今日用昨日收盘信号决策, 今日开盘价成交 (避免前视偏差)。
     open_df 为空时回退用当日收盘成交 (无开盘数据)。
+    gate=False 关闭 MA_N 牛熊线(入池门槛+趋势离场), 纯动量+移动止损。
+    逐日逻辑在 rot_core.rotation_sim (与模拟盘共用, 防漂移)。
     """
-    bt = close_df[bt_start:]
-    sig_close = bt.shift(1)              # 昨日收盘: 所有信号基于它
-    ma = sig_close.rolling(ma_n).mean()
-    above = sig_close > ma
-    mom = sig_close.pct_change(lookback)
-    lowvol = bt[base_etf]
-    if open_df is not None:
-        fill = open_df[bt_start:]
-    else:
-        fill = bt
-
-    values = pd.Series(index=bt.index, dtype=float)
-    base_shares = base_w / lowvol.iloc[0]
-    rot_cash = 1.0 - base_w
-    shares = 0.0
-    code = None
-    peak = 0.0
-    last_sell = {}
-    trades = []
-
-    for i, date in enumerate(bt.index):
-        if i == 0:
-            values.iloc[i] = 1.0
-            continue
-
-        px = sig_close.loc[date, code] if code else None
-        signal = above.loc[date]
-
-        # 轮动仓每日检查 (昨日收盘信号): 趋势破坏或移动止损
-        if code is not None:
-            peak = max(peak, px)
-            reason = None
-            if not bool(signal[code]):
-                reason = "trend"
-            elif px <= peak * (1 - trail):
-                reason = "trail"
-            if reason:
-                exec_px = fill.loc[date, code]
-                proceeds = shares * exec_px * (1 - COMMISSION)
-                rot_cash += proceeds
-                last_sell[code] = i
-                shares = 0.0
-                code = None
-                peak = 0.0
-                trades.append({"date": date, "action": "sell", "code": None, "reason": reason})
-
-        # 每日信号检视 (昨日收盘信号)
-        elig = [c for c in signal[signal].index
-                if not np.isnan(mom.loc[date, c]) and mom.loc[date, c] > min_mom
-                and (cooldown == 0 or i - last_sell.get(c, -10**9) > cooldown)]
-        # 不接飞刀: 距自身近期峰值(60日)回撤 >= TRAIL 的候选视为刚崩, 拦停
-        # (实验见 etf_rot_signal_filter.py 模式 E: 25.1% vs 23.3%, 回撤24.7% vs 29.9%)
-        if elig:
-            peak60 = sig_close.iloc[max(0, i-60):i+1].max(axis=0)
-            elig = [c for c in elig if sig_close.loc[date, c] >= peak60[c] * (1 - trail)]
-        if len(elig) > 0:
-            best = mom.loc[date, elig].idxmax()
-            best_px = fill.loc[date, best]
-            if code is None:
-                target = rot_cash
-                shares = target / best_px
-                cost = target * COMMISSION
-                rot_cash -= target + cost
-                code = best
-                peak = best_px
-                trades.append({"date": date, "action": "buy", "code": best,
-                               "reason": "new", "mom": round(float(mom.loc[date, best]) * 100, 1)})
-            elif best != code:
-                cur_mom = mom.loc[date, code]
-                best_mom = mom.loc[date, best]
-                if best_mom - cur_mom > mom_gap:
-                    old_code = code
-                    exec_px = fill.loc[date, old_code]
-                    proceeds = shares * exec_px * (1 - COMMISSION)
-                    rot_cash += proceeds
-                    target = rot_cash
-                    shares = target / best_px
-                    cost = target * COMMISSION
-                    rot_cash -= target + cost
-                    code = best
-                    peak = best_px
-                    trades.append({"date": date, "action": "switch", "code": best,
-                                   "reason": f"换 {old_code}",
-                                   "mom": round(float(best_mom) * 100, 1)})
-
-        px = bt.loc[date, code] if code else None
-        mv = base_shares * lowvol.iloc[i] + rot_cash + (shares * px if code else 0)
-        values.iloc[i] = mv
-
-    return values, trades
+    sim = rotation_sim(close_df, open_df, ma_n=ma_n, lookback=lookback, mom_gap=mom_gap,
+                       min_mom=min_mom, trail=trail, cooldown=cooldown, base_w=base_w,
+                       base_etf=base_etf, commission=COMMISSION, gate=gate, start=bt_start)
+    return pd.Series(sim["navs"], index=sim["dates"]), sim["trades"]
 
 
 def plot_results(sv, benchs, trades, names, timestamp, title_text=None):
@@ -246,7 +152,7 @@ def plot_results(sv, benchs, trades, names, timestamp, title_text=None):
     if title_text is None:
         title_text = (f"行业ETF信号调仓回测 ({timestamp})<br><sup>"
                       f"每日检视 | MA{MA_N}+动量{LOOKBACK}日 动量差>{MOM_GAP:.0%}才切换 | "
-                      f"低波底仓{int(BASE_W*100)}%+轮动{int((1-BASE_W)*100)}% 止损{int(TRAIL*100)}% | "
+                      f"底仓{BASE_ETF} {int(BASE_W*100)}%+轮动{int((1-BASE_W)*100)}% 止损{int(TRAIL*100)}% | "
                       f"{BT_START} ~ 2026-07</sup>")
     fig.update_layout(
         title_text=title_text,

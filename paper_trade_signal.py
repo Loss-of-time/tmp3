@@ -20,10 +20,8 @@ import numpy as np
 import pandas as pd
 
 from backtest import COMMISSION, calc_metrics
-from etf_rot_signal import (
-    MA_N, LOOKBACK, MOM_GAP, MIN_MOM, TRAIL, COOLDOWN, BASE_W, BASE_ETF,
-    CASH_APR, ETFS_DIR,
-)
+from rot_core import (MA_N, LOOKBACK, MOM_GAP, MIN_MOM, TRAIL, COOLDOWN, BASE_W,
+                      BASE_ETF, ETFS_DIR, rotation_sim)
 from fetch_etf_industry import ETFS, NEW_ETFS, LOWVOL
 from paper_trade import incremental_fetch
 
@@ -329,112 +327,26 @@ def simulate(state, close_df, open_df=None):
     """从模拟账户起始日完整重放至最新交易日。幂等: 每次运行都从 start 重放,
     不依赖数据框行数。返回 (state, today_signal)。
 
+    逐日规则在 rot_core.rotation_sim (与回测共用, 防漂移)。
     成交模型: 今日用昨日收盘信号决策, 今日开盘价成交 (避免前视偏差)。
     """
-    sig_close = close_df.shift(1)        # 昨日收盘: 所有信号基于它
-    ma = sig_close.rolling(MA_N).mean()
-    above = sig_close > ma
-    mom = sig_close.pct_change(LOOKBACK)
-    lowvol = close_df[BASE_ETF]
-    if open_df is not None:
-        fill = open_df
-    else:
-        fill = close_df
-
     if state is None:
-        start_date = close_df.index[-1]
-        state = {"start": str(start_date.date()), "nav_history": [], "trades": []}
-        start_i = len(close_df) - 1
-    else:
-        locs = close_df.index.get_indexer([pd.Timestamp(state["start"])], method="bfill")
-        start_i = locs[0] if locs[0] >= 0 else len(close_df) - 1
-        state["nav_history"] = []
-        state["trades"] = []
+        state = {"start": str(close_df.index[-1].date()), "nav_history": [], "trades": []}
+    state["nav_history"] = []
+    state["trades"] = []
 
-    base_shares = BASE_W / lowvol.iloc[start_i]
-    rot_cash = 1.0 - BASE_W
-    code = None
-    shares = 0.0
-    peak = 0.0
-    last_sell = {}
+    sim = rotation_sim(close_df, open_df, commission=COMMISSION, start=state["start"],
+                       shift_full=True)
+    state["nav_history"] = [{"date": str(d.date()), "nav": round(n, 4)}
+                            for d, n in zip(sim["dates"], sim["navs"])]
+    state["trades"] = [dict(t, date=str(t["date"].date())) for t in sim["trades"]]
 
-    today_signal = None
-    for i in range(start_i, len(close_df)):
-        date = close_df.index[i]
-        signal = above.loc[date]
-
-        if code is not None:
-            px = sig_close.loc[date, code]
-            peak = max(peak, px)
-            reason = None
-            if not bool(signal[code]):
-                reason = "trend"
-            elif px <= peak * (1 - TRAIL):
-                reason = "trail"
-            if reason:
-                exec_px = fill.loc[date, code]
-                rot_cash += shares * exec_px * (1 - COMMISSION)
-                last_sell[code] = i
-                shares = 0.0
-                code = None
-                peak = 0.0
-                state["trades"].append({"date": str(date.date()), "action": "sell",
-                                        "code": None, "reason": reason})
-
-        elig = [c for c in signal[signal].index
-                if not np.isnan(mom.loc[date, c]) and mom.loc[date, c] > MIN_MOM
-                and (COOLDOWN == 0 or i - last_sell.get(c, -10**9) > COOLDOWN)]
-        if elig:
-            peak60 = sig_close.iloc[max(0, i-60):i+1].max(axis=0)
-            elig = [c for c in elig if sig_close.loc[date, c] >= peak60[c] * (1 - TRAIL)]
-        if len(elig) > 0:
-            best = mom.loc[date, elig].idxmax()
-            best_px = fill.loc[date, best]
-            if code is None:
-                target = rot_cash
-                shares = target / best_px
-                rot_cash -= target + target * COMMISSION
-                code = best
-                peak = best_px
-                state["trades"].append({"date": str(date.date()), "action": "buy",
-                                        "code": best, "reason": "new",
-                                        "mom": round(float(mom.loc[date, best]) * 100, 1)})
-            elif best != code:
-                cur_mom = mom.loc[date, code]
-                best_mom = mom.loc[date, best]
-                if best_mom - cur_mom > MOM_GAP:
-                    old = code
-                    exec_px = fill.loc[date, old]
-                    rot_cash += shares * exec_px * (1 - COMMISSION)
-                    shares = 0.0
-                    target = rot_cash
-                    shares = target / best_px
-                    rot_cash -= target + target * COMMISSION
-                    code = best
-                    peak = best_px
-                    state["trades"].append({"date": str(date.date()), "action": "switch",
-                                            "code": best, "reason": f"换 {old}",
-                                            "mom": round(float(best_mom) * 100, 1)})
-
-        if code is not None:
-            nav = base_shares * lowvol.iloc[i] + rot_cash + shares * close_df.loc[date, code]
-        else:
-            nav = base_shares * lowvol.iloc[i] + rot_cash
-        state["nav_history"].append({"date": str(date.date()), "nav": round(nav, 4)})
-
-        if i == len(close_df) - 1:
-            today_signal = {
-                "code": code, "name": None if code is None else "",
-                "mom": None if code is None else float(mom.loc[date, code]),
-                "days": None if code is None else int(i - start_i + 1),
-                "cash_pct": rot_cash / nav if code is None else None,
-                "candidates": [{"code": c, "name": "", "mom": float(mom.loc[date, c]),
-                                "holding": c == code,
-                                "cool": c in last_sell and i - last_sell[c] <= COOLDOWN}
-                               for c in elig],
-                "cooldowns": [c for c, si in last_sell.items() if i - si <= COOLDOWN],
-            }
-
+    last = sim["last"]
+    today_signal = {
+        "code": last["code"], "name": None if last["code"] is None else "",
+        "mom": last["mom"], "days": last["days"], "cash_pct": last["cash_pct"],
+        "cooldowns": last["cooldowns"], "candidates": last["candidates"],
+    }
     return state, today_signal
 
 
