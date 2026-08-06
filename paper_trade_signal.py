@@ -114,7 +114,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>v7 行业ETF信号调仓模拟盘</title>
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script src="https://cdn.plot.ly/plotly-3.7.0.min.js"></script>
 <style>
   :root{--bg:#0f172a;--card:#1e293b;--line:#334155;--txt:#e2e8f0;--mut:#94a3b8;
         --acc:#636efa;--up:#34d399;--down:#f87171}
@@ -135,7 +135,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;
          padding:16px 18px;margin-bottom:20px}
   .panel h3{margin:0 0 12px;font-size:14px;color:var(--mut);font-weight:600}
-  #chart{width:100%;height:480px}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
   @media(max-width:800px){.cards{grid-template-columns:repeat(3,1fr)}.grid2{grid-template-columns:1fr}}
   .holding-big{font-size:26px;font-weight:700;margin:4px 0 10px}
@@ -153,6 +152,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .badge{padding:2px 8px;border-radius:999px;font-size:11px;color:#0f172a;font-weight:600}
   .badge.buy{background:var(--up)}.badge.sell{background:var(--down)}
   .badge.switch{background:#93c5fd}.badge.hold{background:#c4b5fd}
+  .ticks{float:right;font-size:12px}
+  .tickbtn{cursor:pointer;padding:2px 10px;border-radius:6px;border:1px solid var(--line);margin-left:6px;color:var(--mut)}
+  .tickbtn.on{background:var(--acc);border-color:var(--acc);color:#fff}
+  #chart{width:100%;height:420px}
+  #chart2{width:100%;height:210px}
 </style>
 </head>
 <body>
@@ -168,7 +172,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div class="card"><span>夏普</span><b id="sharpe"></b></div>
     <div class="card"><span>纳指自起始</span><b id="bench"></b></div>
   </div>
-  <div class="panel"><h3>策略净值 vs 纳指/上证</h3><div id="chart"></div></div>
+  <div class="panel"><h3>策略净值 vs 纳指/上证
+    <span class="ticks"><span class="tickbtn" data-k="day">日</span><span class="tickbtn" data-k="month">月</span><span class="tickbtn" data-k="year">年</span></span>
+  </h3><div id="chart"></div></div>
+  <div class="panel"><h3>年度收益对比</h3><div id="chart2"></div></div>
   <div class="grid2">
     <div class="panel">
       <h3>今日信号</h3>
@@ -223,55 +230,79 @@ else for (const t of D.trades) {
   tb.appendChild(tr);
 }
 
-const chart = echarts.init($('chart'));
-const mkPoint = (d, v, sym, color) => ({coord:[d,v], symbol:sym, symbolSize:11,
-  itemStyle:{color, borderColor:'#0f172a', borderWidth:1.5},
-  label:{show:true, fontSize:10, color, position:'top', distance:6}});
-const marks = [];
+const PALETTE = ['steelblue','coral','seagreen','goldenrod','mediumpurple',
+                 'tomato','dodgerblue','chocolate','teal','hotpink','olive','indianred'];
+const traces = [
+  {type:'scatter', mode:'lines', name:'策略', x:D.dates, y:D.navs,
+   line:{color:'steelblue', width:2}},
+  {type:'scatter', mode:'lines', name:'纳指', x:D.dates, y:D.benchs.ixic,
+   line:{color:'coral', width:1.5, dash:'dash'}},
+  {type:'scatter', mode:'lines', name:'上证', x:D.dates, y:D.benchs.sse,
+   line:{color:'seagreen', width:1.5, dash:'dash'}},
+];
+const holds = [];
+let cur = null, start = null, buyNav = null;
 for (const t of D.trades) {
   const di = D.dates.indexOf(t.date);
   if (di < 0) continue;
-  const nv = D.navs[di];
-  if (t.kind === 'buy' || t.kind === 'switch') marks.push(mkPoint(t.date, nv, 'triangle', '#34d399'));
-  else if (t.kind === 'sell') marks.push(mkPoint(t.date, nv, 'pin', '#f87171'));
+  if (t.kind === 'buy' || t.kind === 'switch') {
+    if (cur) holds.push({nm:cur, s:start, e:t.date, nav:buyNav});
+    cur = t.name; start = t.date; buyNav = D.navs[di];
+  } else if (t.kind === 'sell' && cur) {
+    holds.push({nm:cur, s:start, e:t.date, nav:buyNav});
+    cur = null;
+  }
 }
-chart.setOption({
-  tooltip: {trigger:'axis', axisPointer:{type:'cross'}, backgroundColor:'#1e293b',
-            borderColor:'#334155', textStyle:{color:'#e2e8f0', fontSize:12}},
-  legend: {top:0, textStyle:{color:'#94a3b8', fontSize:12}, type:'scroll'},
-  grid: [
-    {left:56, right:24, top:36, height:'58%'},
-    {left:56, right:24, top:'74%', height:'15%'}
-  ],
-  xAxis: [
-    {type:'category', data:D.dates, boundaryGap:false, gridIndex:0,
-     axisLabel:{fontSize:11, color:'#94a3b8'}, axisLine:{lineStyle:{color:'#334155'}}},
-    {type:'category', data:D.dates, gridIndex:1, show:false}
-  ],
-  yAxis: [
-    {gridIndex:0, scale:true, name:'净值', nameTextStyle:{color:'#94a3b8'},
-     axisLabel:{fontSize:11, color:'#94a3b8'}, splitLine:{lineStyle:{color:'#263249'}}},
-    {gridIndex:1, show:false, max:1.2}
-  ],
-  series: [
-    {name:'策略净值', type:'line', data:D.navs, smooth:true, showSymbol:false,
-     lineStyle:{width:2.5, color:'#636efa'},
-     areaStyle:{color:'#636efa', opacity:0.10},
-     markPoint:{data:marks}},
-    {name:'纳指', type:'line', data:D.benchs.ixic, smooth:true, showSymbol:false,
-     lineStyle:{width:1.5, color:'#f59e0b', dash:[5,4]}},
-    {name:'上证', type:'line', data:D.benchs.sse, smooth:true, showSymbol:false,
-     lineStyle:{width:1.5, color:'#22d3ee', dash:[5,4]}},
-    ...D.segs.map(s => ({
-      name:s.name, type:'bar', stack:'rot', data:s.data,
-      xAxisIndex:1, yAxisIndex:1, barWidth:'70%',
-      itemStyle:{color:s.color, borderRadius:[4,4,4,4]},
-      emphasis:{itemStyle:{color:s.color}},
-      showBackground:true, backgroundStyle:{color:'rgba(255,255,255,0.03)'}
-    }))
-  ]
-});
-chart.on('legendselectchanged', () => {});
+if (cur) holds.push({nm:cur, s:start, e:D.dates[D.dates.length-1], nav:buyNav});
+const nmColor = {};
+for (const h of holds) if (!(h.nm in nmColor)) nmColor[h.nm] = PALETTE[Object.keys(nmColor).length % PALETTE.length];
+for (const h of holds) traces.push({type:'scatter', mode:'lines', x:[h.s, h.e], y:[h.nav, h.nav],
+  line:{color:nmColor[h.nm], width:4}, showlegend:false, hoverinfo:'text',
+  hovertext:`${h.nm}: ${h.s} ~ ${h.e}<br>买入净值 ${h.nav.toFixed(2)}`});
+for (let i = 0; i < holds.length - 1; i++)
+  if (holds[i].e === holds[i+1].s)
+    traces.push({type:'scatter', mode:'lines', x:[holds[i].e, holds[i].e],
+      y:[holds[i].nav, holds[i+1].nav], line:{color:'rgba(128,128,128,0.7)', width:1.5, dash:'dot'},
+      hoverinfo:'skip', showlegend:false});
+
+const TICKS = {
+  day: {dtick:'D1', tickformat:'%Y-%m-%d'},
+  month: {dtick:'M1', tickformat:'%Y-%m'},
+  year: {dtick:'M12', tickformat:'%Y'}
+};
+const spanDays = (new Date(D.dates[D.dates.length-1]) - new Date(D.dates[0])) / 86400000;
+let tickKey = spanDays > 800 ? 'year' : spanDays > 60 ? 'month' : 'day';
+const chartLayout = {
+  template:'plotly_dark', height:420, hovermode:'closest',
+  margin:{l:60, r:20, t:36, b:40}, legend:{orientation:'h', y:1.08},
+  xaxis:{type:'date', gridcolor:'#263249'},
+  yaxis:{type:'log', title:'净值(对数)', gridcolor:'#263249'},
+};
+Plotly.newPlot($('chart'), traces, chartLayout, {responsive:true});
+Plotly.relayout($('chart'), {xaxis:TICKS[tickKey]});
+for (const b of document.querySelectorAll('.tickbtn'))
+  b.classList.toggle('on', b.dataset.k === tickKey);
+for (const b of document.querySelectorAll('.tickbtn'))
+  b.onclick = () => { tickKey = b.dataset.k;
+    Plotly.relayout($('chart'), {xaxis:TICKS[tickKey]});
+    for (const x of document.querySelectorAll('.tickbtn')) x.classList.toggle('on', x === b); };
+
+const years = [...new Set(D.dates.map(d => d.slice(0,4)))].sort();
+const yearlyRet = arr => {
+  const last = {};
+  D.dates.forEach((d,i) => { last[d.slice(0,4)] = arr[i]; });
+  return years.map((y,i) => i === 0 ? (last[y]-1)*100 : (last[y]/last[years[i-1]]-1)*100);
+};
+const bars = [{name:'策略', y:yearlyRet(D.navs), marker:{color:'steelblue'}}];
+for (const [nm, arr] of [['纳指', D.benchs.ixic], ['上证', D.benchs.sse]])
+  if (arr && arr.length) bars.push({name:nm, y:yearlyRet(arr), opacity:0.7,
+    marker:{color:nm === '纳指' ? 'coral' : 'seagreen'}});
+Plotly.newPlot($('chart2'), bars.map(b => ({type:'bar', x:years, ...b})), {
+  template:'plotly_dark', height:210, barmode:'group',
+  margin:{l:60, r:20, t:30, b:36},
+  xaxis:{dtick:'M12', tickformat:'%Y'},
+  yaxis:{title:'年度收益 (%)', gridcolor:'#263249'},
+}, {responsive:true});
 </script>
 </body>
 </html>
@@ -329,8 +360,11 @@ def simulate(state, close_df, open_df=None):
 
     sim = rotation_sim(close_df, open_df, commission=COMMISSION, start=state["start"],
                        shift_full=True)
-    state["nav_history"] = [{"date": str(d.date()), "nav": round(n, 4)}
-                            for d, n in zip(sim["dates"], sim["navs"])]
+    prev = close_df.index[close_df.index < pd.Timestamp(state["start"])]
+    day0 = str(prev[-1].date()) if len(prev) else state["start"]
+    state["nav_history"] = [{"date": day0, "nav": 1.0}] + [
+        {"date": str(d.date()), "nav": round(n, 4)}
+        for d, n in zip(sim["dates"], sim["navs"])]
     state["trades"] = [dict(t, date=str(t["date"].date())) for t in sim["trades"]]
 
     last = sim["last"]
