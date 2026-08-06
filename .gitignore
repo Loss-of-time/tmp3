@@ -53,6 +53,7 @@ etf_rot_signal_rolling_*.html
 etf_rot_signal_cyb_result_*.csv
 etf_rot_signal_cyb_result_*.html
 etf_rot_signal_sweep_*.csv
+risk3_*.csv
 etf_cyb_result_*.csv
 etf_cyb_result_*.html
 etf_cyb_trades_*.csv

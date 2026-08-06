@@ -21,9 +21,9 @@ import pandas as pd
 
 from backtest import COMMISSION, calc_metrics
 from rot_core import (MA_N, LOOKBACK, MOM_GAP, MIN_MOM, TRAIL, COOLDOWN, BASE_W,
-                      BASE_ETF, ETFS_DIR, rotation_sim)
-from fetch_etf_industry import ETFS, NEW_ETFS, LOWVOL
+                      BASE_ETF, rotation_sim)
 from paper_trade import incremental_fetch
+import dynpool
 
 STATE_FILE = "paper_signal_state.json"
 REPORT_DIR = "docs"
@@ -34,7 +34,6 @@ BENCH_CACHES = {
     "上证": "cache_bt/sh000001.json",
 }
 
-ALL_ETFS = {**ETFS, **NEW_ETFS, **LOWVOL}
 
 
 def _tencent_fetch(code, start, end):
@@ -279,37 +278,30 @@ chart.on('legendselectchanged', () => {});
 """
 
 
+def _cand_file(code):
+    for d in dynpool.DIRS:
+        f = os.path.join(d, f"{code}.json")
+        if os.path.exists(f):
+            return f
+    return None
+
+
 def load_close_df():
-    """读本地缓存, 若最新日期早于今天则增量更新。返回 (close_df, open_df, names)。"""
-    close = {}
-    open_ = {}
-    names = {}
-    need_update = []
-    for code, name in ALL_ETFS.items():
-        f = os.path.join(ETFS_DIR, f"{code}.json")
-        if not os.path.exists(f):
-            need_update.append(code)
-            continue
-        d = json.load(open(f))
-        close[code] = pd.Series(d["close"], index=pd.to_datetime(d["dates"]))
-        open_[code] = pd.Series(d["open"], index=pd.to_datetime(d["dates"]))
-        names[code] = d.get("name", name)
-        if pd.Timestamp(d["dates"][-1]) < pd.Timestamp(date.today()):
-            need_update.append(code)
+    """读候选缓存, 最新日期早于今天则增量更新, 构建动态池。返回 (close_df, open_df, names)。"""
+    cands = dynpool.load_candidates()
+    names = {c: d["name"] for c, d in cands.items()}
+    need_update = [c for c, d in cands.items()
+                   if pd.Timestamp(d["close"].index[-1]) < pd.Timestamp(date.today())]
     if need_update:
-        print(f"增量更新 {len(need_update)} 只: {[ALL_ETFS[c] for c in need_update]}")
+        print(f"增量更新 {len(need_update)} 只: {[names[c] for c in need_update]}")
         for code in need_update:
             try:
-                incremental_fetch(code, ALL_ETFS[code])
-                d = json.load(open(os.path.join(ETFS_DIR, f"{code}.json")))
-                close[code] = pd.Series(d["close"], index=pd.to_datetime(d["dates"]))
-                open_[code] = pd.Series(d["open"], index=pd.to_datetime(d["dates"]))
-                names[code] = d.get("name", ALL_ETFS[code])
+                incremental_fetch(code, names[code], path=_cand_file(code))
             except Exception as e:
                 print(f"  {code} 更新失败, 用缓存: {str(e)[:80]}")
-    close_df = pd.DataFrame(close).sort_index()
-    open_df = pd.DataFrame(open_).sort_index().reindex(close_df.index).ffill()
-    return close_df[~close_df.index.duplicated()].ffill(), open_df, names
+        cands = dynpool.load_candidates()      # 重读含更新
+    close_df, open_df, _ = dynpool.build_pool(cands, dynpool.fetch_aum())
+    return close_df, open_df, names
 
 
 def load_state():

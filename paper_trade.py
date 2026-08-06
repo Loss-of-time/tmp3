@@ -156,7 +156,7 @@ def load_close_df():
     return close_df[~close_df.index.duplicated()].ffill(), names
 
 
-def incremental_fetch(code, name, retries=12, pause=15):
+def incremental_fetch(code, name, retries=12, pause=15, path=None):
     """从缓存最后日期往前推 10 天重新拉取, 覆盖重叠区后追加, 保证 qfq 拼接一致。
 
     数据源: 腾讯 fqkline (东财 push2his 2026-08 起不可用)。
@@ -165,7 +165,7 @@ def incremental_fetch(code, name, retries=12, pause=15):
 
     from fetch_etf_industry import _tencent_page
 
-    f = os.path.join(ETFS_DIR, f"{code}.json")
+    f = path or os.path.join(ETFS_DIR, f"{code}.json")
     d = json.load(open(f))
     last = d["dates"][-1]
     start = (pd.Timestamp(last) - pd.Timedelta(days=10)).strftime("%Y-%m-%d")

@@ -18,7 +18,6 @@
 - 底仓 BASE_W 恒持底仓标的(BASE_ETF), 剩余做轮动; 空仓吃现金 CASH_APR
 """
 
-import glob
 import json
 import os
 from datetime import datetime
@@ -30,23 +29,21 @@ from plotly.subplots import make_subplots
 
 from backtest import COMMISSION, calc_metrics
 from rot_core import (MA_N, LOOKBACK, MOM_GAP, MIN_MOM, TRAIL, COOLDOWN, BASE_W,
-                      BASE_ETF, BT_START, CASH_APR, ETFS_DIR, rotation_sim)
+                      BASE_ETF, BT_START, CASH_APR, rotation_sim, TP_HALF)
 
-HS300_CACHE = "cache_bt/hs300.json"
 BENCHES = {"纳指": "cache_bt/ixic.json", "上证": "cache_bt/sh000001.json"}
 
 
 def load_data():
-    etfs = {}
-    opens = {}
-    for f in sorted(glob.glob(os.path.join(ETFS_DIR, "*.json"))):
-        d = json.load(open(f))
-        dates = pd.to_datetime(d["dates"])
-        etfs[d["code"]] = pd.Series(d["close"], index=dates).sort_index()
-        opens[d["code"]] = pd.Series(d["open"], index=dates).sort_index()
-    hs300 = json.load(open(HS300_CACHE))
-    hs300_s = pd.Series(hs300["close"], index=pd.to_datetime(hs300["dates"])).sort_index()
-    return etfs, opens, hs300_s
+    """默认动态池: 候选=行业池+explore, 规则化入池 (上市满3年/AUM≥10亿/相关<0.8/只进不出)。
+
+    AUM 拉取失败降级为跳过 (离线可跑)。返回 (close_df, open_df, names)。
+    """
+    from dynpool import load_candidates, fetch_aum, build_pool
+    cands = load_candidates()
+    close_df, open_df, _ = build_pool(cands, fetch_aum())
+    names = {c: d["name"] for c, d in cands.items()}
+    return close_df, open_df, names
 
 
 def load_benches():
@@ -78,10 +75,10 @@ def rotation_backtest(close_df, open_df=None, bt_start=BT_START, ma_n=MA_N, look
 def plot_results(sv, benchs, trades, names, timestamp, title_text=None):
     """benchs: {名称: 归一化Series}"""
     fig = make_subplots(
-        rows=3, cols=2,
-        subplot_titles=("净值曲线", "年度收益对比", "持仓标的", "策略指标"),
-        row_heights=[0.4, 0.3, 0.3],
-        specs=[[{"colspan": 2}, None], [{"colspan": 2}, None], [{}, {"type": "table"}]],
+        rows=2, cols=2,
+        subplot_titles=("净值(对数) + 持仓", "年度收益对比", "策略指标"),
+        row_heights=[0.58, 0.42],
+        specs=[[{"colspan": 2}, None], [{}, {"type": "table"}]],
     )
 
     sv = sv / sv.iloc[0]
@@ -89,6 +86,7 @@ def plot_results(sv, benchs, trades, names, timestamp, title_text=None):
                              line=dict(color="steelblue", width=2)), row=1, col=1)
     bench_colors = ["coral", "seagreen"]
     for k, (name, bv) in enumerate(benchs.items()):
+        bv = bv.loc[bv.index >= sv.index[0]]      # 基准裁剪到回测起点, 防前导段
         bv = bv / bv.iloc[0]
         fig.add_trace(go.Scatter(x=bv.index, y=bv, mode="lines", name=name,
                                  line=dict(color=bench_colors[k % 2], width=1.5,
@@ -121,12 +119,32 @@ def plot_results(sv, benchs, trades, names, timestamp, title_text=None):
             cur = None
     if cur is not None and start is not None:
         holds.append((cur, start, sv.index[-1]))
-    for code, s, e in holds:
+    row_names = []
+    for code, _, _ in holds:
+        nm = f"{names[code]} {code}"
+        if nm not in row_names:
+            row_names.append(nm)
+    palette = ["steelblue", "coral", "seagreen", "goldenrod", "mediumpurple",
+               "tomato", "dodgerblue", "chocolate", "teal", "hotpink",
+               "olive", "indianred", "darkcyan", "plum", "darkorange"]
+    row_color = {nm: palette[i % len(palette)] for i, nm in enumerate(row_names)}
+    buy_nav = [float(sv.loc[s]) for _, s, _ in holds]
+    for (code, s, e), bn in zip(holds, buy_nav):
+        nm = f"{names[code]} {code}"
         fig.add_trace(go.Scatter(
-            x=[s, e], y=[f"{names[code]} {code}", f"{names[code]} {code}"],
-            mode="lines", line=dict(width=8), name=f"{names[code]} {code}", showlegend=False,
-            hovertext=[f"{names[code]} ({code}): {s.date()} ~ {e.date()}"],
-        ), row=3, col=1)
+            x=[s, e], y=[bn, bn],
+            mode="lines", line=dict(width=4, color=row_color[nm]), name=nm, showlegend=False,
+            hovertext=[f"{names[code]} ({code}): {s.date()} ~ {e.date()} 买入净值 {bn:.2f}",
+                       f"{names[code]} ({code}): {s.date()} ~ {e.date()} 买入净值 {bn:.2f}"],
+            xaxis="x", yaxis="y",
+        ))
+    for i in range(len(holds) - 1):
+        if holds[i][2] == holds[i + 1][1]:
+            fig.add_trace(go.Scatter(
+                x=[holds[i][2], holds[i][2]], y=[buy_nav[i], buy_nav[i + 1]],
+                mode="lines", line=dict(color="rgba(128,128,128,0.7)", width=1.5, dash="dot"),
+                showlegend=False, hoverinfo="skip", xaxis="x", yaxis="y",
+            ))
 
     sm = calc_metrics(sv)
     n_buy = sum(1 for t in trades if t["action"] == "buy")
@@ -147,32 +165,29 @@ def plot_results(sv, benchs, trades, names, timestamp, title_text=None):
              f"{n_buy}", f"{n_switch}", f"{int((1-BASE_W)*100)}%"],
             *bench_cols,
         ]),
-    ), row=3, col=2)
+    ), row=2, col=2)
 
     if title_text is None:
+        tp_s = f"浮盈{int(TP_HALF*100)}%卖半 | " if TP_HALF else ""
         title_text = (f"行业ETF信号调仓回测 ({timestamp})<br><sup>"
                       f"每日检视 | MA{MA_N}+动量{LOOKBACK}日 动量差>{MOM_GAP:.0%}才切换 | "
                       f"底仓{BASE_ETF} {int(BASE_W*100)}%+轮动{int((1-BASE_W)*100)}% 止损{int(TRAIL*100)}% | "
-                      f"{BT_START} ~ 2026-07</sup>")
+                      f"{tp_s}{BT_START} ~ {sv.index[-1].strftime('%Y-%m')}</sup>")
     fig.update_layout(
         title_text=title_text,
-        height=1000,
+        height=1400,
+        yaxis=dict(type="log", title="净值(对数)"),
+        xaxis=dict(tickmode="linear", dtick="M12", tickformat="%Y"),
     )
-    fig.update_yaxes(title_text="净值", row=1, col=1)
     fig.update_yaxes(title_text="年度收益 (%)", row=2, col=1)
-    fig.update_yaxes(title_text="持仓标的", row=3, col=1)
     return fig.to_html(include_plotlyjs="cdn", full_html=True)
 
 
 def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    print("[1/2] 读取缓存...")
-    etfs, opens, _ = load_data()
-    close_df = pd.DataFrame(etfs).sort_index().ffill()
-    open_df = pd.DataFrame(opens).sort_index().reindex(close_df.index).ffill()
-    names = {json.load(open(f))["code"]: json.load(open(f))["name"]
-             for f in glob.glob(os.path.join(ETFS_DIR, "*.json"))}
-    print(f"      {len(etfs)} 只: " + ", ".join(names[c] for c in close_df.columns))
+    print("[1/2] 读取缓存 + 构建动态池...")
+    close_df, open_df, names = load_data()
+    print(f"      池 {len(close_df.columns)} 只: " + ", ".join(names[c] for c in close_df.columns))
 
     print(f"[2/2] 回测 (每日检视, MA{MA_N}, 动量{LOOKBACK}日, 动量差>{MOM_GAP:.0%}切换, "
           f"止损{TRAIL:.0%}, 底仓{BASE_W:.0%})...")

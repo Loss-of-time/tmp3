@@ -22,17 +22,19 @@ MIN_MOM = 0.0       # 入场门槛: 动量必须 > 此值才可买入
 MOM_CAP = None      # 动量上限: 180日动量 >= 此比例不买入 (None=关闭, 过热过滤实验)
 TRAIL = 0.20        # 移动止损: 从持仓峰值回撤此比例离场
 TP_HALF = 0.8       # 部分止盈: 轮动仓浮盈达此比例卖一半落袋 (None=关闭, 剩余仍跟 trail)
+TP_FRAC = 1.0       # 部分止盈卖出占比: 触发 TP_HALF 时卖出仓位的此比例 (1.0=全止盈清仓, 联合调优定稿)
 COOLDOWN = 20       # 冷却期: 卖出后此天数内不买回同标的
 BASE_W = 0.45       # 底仓权重
 BASE_ETF = "518880" # 底仓标的: "512890" 红利低波 / "513100" 纳指ETF(溢价可接受) / "518880" 黄金(长周期唯一单调稳健防御)
-BT_START = "2015-01-01"
+BT_START = "2016-08-11"
 CASH_APR = 0.02
 ETFS_DIR = "cache_bt/etf_industry"
 
 
 def rotation_sim(close_df, open_df=None, *, ma_n=MA_N, lookback=LOOKBACK,
                  mom_gap=MOM_GAP, min_mom=MIN_MOM, mom_cap=MOM_CAP,
-                 trail=TRAIL, tp_half=TP_HALF, cooldown=COOLDOWN,
+                 trail=TRAIL, tp_half=TP_HALF, tp_frac=TP_FRAC, tp_reset=False,
+                 cooldown=COOLDOWN,
                  base_w=BASE_W, base_etf=BASE_ETF, commission=0.001, gate=True,
                  start=None, shift_full=False):
     """逐日重放 v7 轮动策略。返回 {"dates", "navs", "trades", "last"}。
@@ -45,29 +47,20 @@ def rotation_sim(close_df, open_df=None, *, ma_n=MA_N, lookback=LOOKBACK,
     """
     if shift_full:
         sig_close = close_df.shift(1)          # 模拟盘: 全量信号, 起跑日可用前一交易日
-        ma = sig_close.rolling(ma_n).mean()
-        above = (pd.DataFrame(True, index=sig_close.index, columns=sig_close.columns)
-                 if not gate else (sig_close > ma))
-        mom = sig_close.pct_change(lookback)
-        peak60 = sig_close.rolling(61, min_periods=1).max()   # 60日峰值(含当日)
-        if start is not None:
-            win = close_df.index >= pd.Timestamp(start)
-            close_df = close_df.loc[win]
-            sig_close = sig_close.loc[win]
-            ma, above, mom, peak60 = (x.loc[win] for x in (ma, above, mom, peak60))
-            if open_df is not None:
-                open_df = open_df.loc[win]
     else:
-        if start is not None:
-            close_df = close_df.loc[close_df.index >= pd.Timestamp(start)]
-            if open_df is not None:
-                open_df = open_df.loc[open_df.index >= pd.Timestamp(start)]
-        sig_close = close_df.shift(1)          # 回测: 窗口内 shift, 起跑首日无信号
-        ma = sig_close.rolling(ma_n).mean()
-        above = (pd.DataFrame(True, index=sig_close.index, columns=sig_close.columns)
-                 if not gate else (sig_close > ma))
-        mom = sig_close.pct_change(lookback)
-        peak60 = sig_close.rolling(61, min_periods=1).max()
+        sig_close = close_df.shift(1)          # 回测: 同上 (指标用起跑前历史预热, 非未来函数)
+    ma = sig_close.rolling(ma_n).mean()
+    above = (pd.DataFrame(True, index=sig_close.index, columns=sig_close.columns)
+             if not gate else (sig_close > ma))
+    mom = sig_close.pct_change(lookback)
+    peak60 = sig_close.rolling(61, min_periods=1).max()   # 60日峰值(含当日)
+    if start is not None:
+        win = close_df.index >= pd.Timestamp(start)
+        close_df = close_df.loc[win]
+        sig_close = sig_close.loc[win]
+        ma, above, mom, peak60 = (x.loc[win] for x in (ma, above, mom, peak60))
+        if open_df is not None:
+            open_df = open_df.loc[win]
     lowvol = close_df[base_etf].fillna(0.0)
     first_px = lowvol[lowvol > 0].iloc[0]
     lowvol = lowvol.replace(0.0, first_px)
@@ -108,13 +101,18 @@ def rotation_sim(close_df, open_df=None, *, ma_n=MA_N, lookback=LOOKBACK,
                 half_done = False
                 day_trades.append({"date": date, "action": "sell", "code": None,
                                    "reason": reason})
-            elif tp_half and not half_done and px >= cost * (1 + tp_half):
+            elif tp_half and tp_frac > 0 and not half_done and px >= cost * (1 + tp_half):
                 exec_px = fill.loc[date, code]
-                rot_cash += shares * 0.5 * exec_px * (1 - commission)
-                shares *= 0.5
+                rot_cash += shares * tp_frac * exec_px * (1 - commission)
+                shares *= (1 - tp_frac)
                 half_done = True
                 day_trades.append({"date": date, "action": "tp_half", "code": code,
                                    "reason": f"浮盈{tp_half:.0%}卖半"})
+                if tp_reset and shares == 0:
+                    # 全卖后释放占位: 等同立即离场, 当日信号即可重新入场 (占位=被原标的事先拴住)
+                    last_sell[code] = i
+                    code = None
+                    peak = 0.0
 
         # 每日信号检视 (昨日收盘信号)
         elig = [c for c in signal[signal].index
