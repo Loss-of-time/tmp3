@@ -1,0 +1,17 @@
+.git
+.venv
+__pycache__
+cache
+cache_fin
+cache_quality
+cache_wyckoff
+docs
+*.html
+*.csv
+*.json
+!paper_signal_state.json
+!cache_bt/etf_industry/
+!cache_bt/etf_explore/
+!cache_bt/hs300.json
+!cache_bt/ixic.json
+!cache_bt/sh000001.json

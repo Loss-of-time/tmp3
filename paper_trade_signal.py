@@ -21,8 +21,9 @@ import pandas as pd
 
 from backtest import COMMISSION, calc_metrics
 from rot_core import (MA_N, LOOKBACK, MOM_GAP, MIN_MOM, TRAIL, COOLDOWN, BASE_W,
-                      BASE_ETF, rotation_sim)
+                      BASE_ETF, rotation_sim, TP_HALF, TP_FRAC, DROP_N, DROP_X)
 from paper_trade import incremental_fetch
+from etf_rot_signal import plot_results
 import dynpool
 
 STATE_FILE = "paper_signal_state.json"
@@ -108,205 +109,6 @@ def update_hs300():
         print(f"沪深300 更新失败, 用旧缓存: {str(e)[:80]}")
 
 
-HTML_TEMPLATE = """<!DOCTYPE html>
-<html lang="zh">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>v7 行业ETF信号调仓模拟盘</title>
-<script src="https://cdn.plot.ly/plotly-3.7.0.min.js"></script>
-<style>
-  :root{--bg:#0f172a;--card:#1e293b;--line:#334155;--txt:#e2e8f0;--mut:#94a3b8;
-        --acc:#636efa;--up:#34d399;--down:#f87171}
-  *{box-sizing:border-box}
-  body{margin:0;font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
-       background:var(--bg);color:var(--txt)}
-  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 60px}
-  h1{font-size:22px;margin:0 0 2px;letter-spacing:.5px}
-  .sub{color:var(--mut);font-size:13px;margin:0 0 6px;line-height:1.6}
-  .tag{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;
-       background:rgba(99,102,241,.15);color:#a5b4fc;margin-top:4px}
-  .cards{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:20px 0}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
-  .card span{display:block;color:var(--mut);font-size:11px;margin-bottom:6px}
-  .card b{font-size:18px}
-  .card small{color:var(--mut);font-size:11px}
-  .pos{color:var(--up)}.neg{color:var(--down)}
-  .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;
-         padding:16px 18px;margin-bottom:20px}
-  .panel h3{margin:0 0 12px;font-size:14px;color:var(--mut);font-weight:600}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
-  @media(max-width:800px){.cards{grid-template-columns:repeat(3,1fr)}.grid2{grid-template-columns:1fr}}
-  .holding-big{font-size:26px;font-weight:700;margin:4px 0 10px}
-  .mom-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #263249;font-size:13px}
-  .mom-row:last-child{border-bottom:none}
-  .mom-row .nm{color:var(--txt)}
-  .mom-row .val{font-family:ui-monospace,Menlo,monospace}
-  .pill{padding:1px 8px;border-radius:999px;font-size:11px;margin-left:8px}
-  .pill.hold{background:rgba(52,211,153,.15);color:var(--up)}
-  .pill.cool{background:rgba(248,113,113,.15);color:var(--down)}
-  .empty{color:var(--mut);font-size:13px;padding:20px 0;text-align:center}
-  table{width:100%;border-collapse:collapse;font-size:12.5px}
-  th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #263249}
-  th{color:var(--mut);font-weight:600}
-  .badge{padding:2px 8px;border-radius:999px;font-size:11px;color:#0f172a;font-weight:600}
-  .badge.buy{background:var(--up)}.badge.sell{background:var(--down)}
-  .badge.switch{background:#93c5fd}.badge.hold{background:#c4b5fd}
-  .ticks{float:right;font-size:12px}
-  .tickbtn{cursor:pointer;padding:2px 10px;border-radius:6px;border:1px solid var(--line);margin-left:6px;color:var(--mut)}
-  .tickbtn.on{background:var(--acc);border-color:var(--acc);color:#fff}
-  #chart{width:100%;height:420px}
-  #chart2{width:100%;height:210px}
-</style>
-</head>
-<body>
-<div class="wrap">
-  <h1>v7 行业ETF信号调仓 · 模拟盘</h1>
-  <p class="sub" id="sub"></p>
-  <span class="tag" id="rule"></span>
-  <div class="cards">
-    <div class="card"><span>当前净值</span><b id="nav"></b></div>
-    <div class="card"><span>自起始收益</span><b id="ret"></b></div>
-    <div class="card"><span>年化</span><b id="ann"></b></div>
-    <div class="card"><span>最大回撤</span><b id="dd"></b></div>
-    <div class="card"><span>夏普</span><b id="sharpe"></b></div>
-    <div class="card"><span>纳指自起始</span><b id="bench"></b></div>
-  </div>
-  <div class="panel"><h3>策略净值 vs 纳指/上证
-    <span class="ticks"><span class="tickbtn" data-k="day">日</span><span class="tickbtn" data-k="month">月</span><span class="tickbtn" data-k="year">年</span></span>
-  </h3><div id="chart"></div></div>
-  <div class="panel"><h3>年度收益对比</h3><div id="chart2"></div></div>
-  <div class="grid2">
-    <div class="panel">
-      <h3>今日信号</h3>
-      <div id="holding"></div>
-      <div id="signals"></div>
-    </div>
-    <div class="panel">
-      <h3>动量排名（今日可买候选）</h3>
-      <div id="ranking"></div>
-    </div>
-  </div>
-  <div class="panel"><h3>交易记录</h3>
-    <table><thead><tr><th>日期</th><th>操作</th><th>标的</th><th>原因</th></tr></thead>
-    <tbody id="trades"></tbody></table>
-  </div>
-</div>
-<script id="data" type="application/json">__DATA__</script>
-<script>
-const D = JSON.parse(document.getElementById('data').textContent);
-const $ = id => document.getElementById(id);
-$('sub').textContent = D.meta.sub;
-$('rule').textContent = D.meta.rule;
-$('nav').textContent = D.meta.nav;
-$('ret').textContent = D.meta.ret;
-$('ann').textContent = D.meta.ann;
-$('dd').textContent = D.meta.dd;
-$('sharpe').textContent = D.meta.sharpe;
-$('bench').textContent = D.meta.bench;
-
-const fmt = (x, cls) => `<b class="${cls}">${x}</b>`;
-const hd = D.holding;
-$('holding').innerHTML = hd.empty
-  ? '<div class="empty">轮动仓空仓（持币 ' + (hd.cash_pct*100).toFixed(0) + '%）</div>'
-  : `<div class="holding-big">${hd.name}</div>
-     <div class="mom-row"><span class="nm">持仓</span><span class="val ${hd.mom>0?'pos':'neg'}">动量 ${(hd.mom*100).toFixed(1)}%</span></div>
-     <div class="mom-row"><span class="nm">持有天数</span><span class="val">${hd.days}</span></div>`;
-$('signals').innerHTML = D.signals.map(s =>
-  `<div class="mom-row"><span class="nm">${s.txt}${s.pill}</span><span class="val"></span></div>`).join('')
-  || '<div class="empty">-</div>';
-
-$('ranking').innerHTML = D.ranking.length
-  ? D.ranking.map((r,i) =>
-    `<div class="mom-row"><span class="nm">${i+1}. ${r.name}${r.hold?'<span class="pill hold">持仓</span>':''}${r.cool?'<span class="pill cool">冷却</span>':''}</span>
-     <span class="val ${r.mom>0?'pos':'neg'}">${(r.mom*100).toFixed(1)}%</span></div>`).join('')
-  : '<div class="empty">今日无站上牛熊线的可买标的</div>';
-
-const tb = $('trades');
-if (!D.trades.length) { tb.innerHTML = '<tr><td colspan="4" class="empty">暂无交易</td></tr>'; }
-else for (const t of D.trades) {
-  const tr = document.createElement('tr');
-  tr.innerHTML = `<td>${t.date}</td><td><span class="badge ${t.kind}">${t.label}</span></td><td>${t.name}</td><td>${t.reason}</td>`;
-  tb.appendChild(tr);
-}
-
-const PALETTE = ['steelblue','coral','seagreen','goldenrod','mediumpurple',
-                 'tomato','dodgerblue','chocolate','teal','hotpink','olive','indianred'];
-const traces = [
-  {type:'scatter', mode:'lines', name:'策略', x:D.dates, y:D.navs,
-   line:{color:'steelblue', width:2}},
-  {type:'scatter', mode:'lines', name:'纳指', x:D.dates, y:D.benchs.ixic,
-   line:{color:'coral', width:1.5, dash:'dash'}},
-  {type:'scatter', mode:'lines', name:'上证', x:D.dates, y:D.benchs.sse,
-   line:{color:'seagreen', width:1.5, dash:'dash'}},
-];
-const holds = [];
-let cur = null, start = null, buyNav = null;
-for (const t of D.trades) {
-  const di = D.dates.indexOf(t.date);
-  if (di < 0) continue;
-  if (t.kind === 'buy' || t.kind === 'switch') {
-    if (cur) holds.push({nm:cur, s:start, e:t.date, nav:buyNav});
-    cur = t.name; start = t.date; buyNav = D.navs[di];
-  } else if (t.kind === 'sell' && cur) {
-    holds.push({nm:cur, s:start, e:t.date, nav:buyNav});
-    cur = null;
-  }
-}
-if (cur) holds.push({nm:cur, s:start, e:D.dates[D.dates.length-1], nav:buyNav});
-const nmColor = {};
-for (const h of holds) if (!(h.nm in nmColor)) nmColor[h.nm] = PALETTE[Object.keys(nmColor).length % PALETTE.length];
-for (const h of holds) traces.push({type:'scatter', mode:'lines', x:[h.s, h.e], y:[h.nav, h.nav],
-  line:{color:nmColor[h.nm], width:4}, showlegend:false, hoverinfo:'text',
-  hovertext:`${h.nm}: ${h.s} ~ ${h.e}<br>买入净值 ${h.nav.toFixed(2)}`});
-for (let i = 0; i < holds.length - 1; i++)
-  if (holds[i].e === holds[i+1].s)
-    traces.push({type:'scatter', mode:'lines', x:[holds[i].e, holds[i].e],
-      y:[holds[i].nav, holds[i+1].nav], line:{color:'rgba(128,128,128,0.7)', width:1.5, dash:'dot'},
-      hoverinfo:'skip', showlegend:false});
-
-const TICKS = {
-  day: {dtick:'D1', tickformat:'%Y-%m-%d'},
-  month: {dtick:'M1', tickformat:'%Y-%m'},
-  year: {dtick:'M12', tickformat:'%Y'}
-};
-const spanDays = (new Date(D.dates[D.dates.length-1]) - new Date(D.dates[0])) / 86400000;
-let tickKey = spanDays > 800 ? 'year' : spanDays > 60 ? 'month' : 'day';
-const chartLayout = {
-  template:'plotly_dark', height:420, hovermode:'closest',
-  margin:{l:60, r:20, t:36, b:40}, legend:{orientation:'h', y:1.08},
-  xaxis:{type:'date', gridcolor:'#263249'},
-  yaxis:{type:'log', title:'净值(对数)', gridcolor:'#263249'},
-};
-Plotly.newPlot($('chart'), traces, chartLayout, {responsive:true});
-Plotly.relayout($('chart'), {xaxis:TICKS[tickKey]});
-for (const b of document.querySelectorAll('.tickbtn'))
-  b.classList.toggle('on', b.dataset.k === tickKey);
-for (const b of document.querySelectorAll('.tickbtn'))
-  b.onclick = () => { tickKey = b.dataset.k;
-    Plotly.relayout($('chart'), {xaxis:TICKS[tickKey]});
-    for (const x of document.querySelectorAll('.tickbtn')) x.classList.toggle('on', x === b); };
-
-const years = [...new Set(D.dates.map(d => d.slice(0,4)))].sort();
-const yearlyRet = arr => {
-  const last = {};
-  D.dates.forEach((d,i) => { last[d.slice(0,4)] = arr[i]; });
-  return years.map((y,i) => i === 0 ? (last[y]-1)*100 : (last[y]/last[years[i-1]]-1)*100);
-};
-const bars = [{name:'策略', y:yearlyRet(D.navs), marker:{color:'steelblue'}}];
-for (const [nm, arr] of [['纳指', D.benchs.ixic], ['上证', D.benchs.sse]])
-  if (arr && arr.length) bars.push({name:nm, y:yearlyRet(arr), opacity:0.7,
-    marker:{color:nm === '纳指' ? 'coral' : 'seagreen'}});
-Plotly.newPlot($('chart2'), bars.map(b => ({type:'bar', x:years, ...b})), {
-  template:'plotly_dark', height:210, barmode:'group',
-  margin:{l:60, r:20, t:30, b:36},
-  xaxis:{dtick:'M12', tickformat:'%Y'},
-  yaxis:{title:'年度收益 (%)', gridcolor:'#263249'},
-}, {responsive:true});
-</script>
-</body>
-</html>
-"""
 
 
 def _cand_file(code):
@@ -318,7 +120,7 @@ def _cand_file(code):
 
 
 def load_close_df():
-    """读候选缓存, 最新日期早于今天则增量更新, 构建动态池。返回 (close_df, open_df, names)。"""
+    """读候选缓存, 最新日期早于今天则增量更新, 构建动态池。返回 (close_df, open_df, names, tradable)。"""
     cands = dynpool.load_candidates()
     names = {c: d["name"] for c, d in cands.items()}
     need_update = [c for c, d in cands.items()
@@ -331,8 +133,8 @@ def load_close_df():
             except Exception as e:
                 print(f"  {code} 更新失败, 用缓存: {str(e)[:80]}")
         cands = dynpool.load_candidates()      # 重读含更新
-    close_df, open_df, _ = dynpool.build_pool(cands, dynpool.fetch_aum())
-    return close_df, open_df, names
+    close_df, open_df, _, tradable = dynpool.build_pool(cands, dynpool.fetch_aum())
+    return close_df, open_df, names, tradable
 
 
 def load_state():
@@ -346,7 +148,7 @@ def save_state(state):
         json.dump(state, fh, ensure_ascii=False, indent=2)
 
 
-def simulate(state, close_df, open_df=None):
+def simulate(state, close_df, open_df=None, tradable=None, names=None):
     """从模拟账户起始日完整重放至最新交易日。幂等: 每次运行都从 start 重放,
     不依赖数据框行数。返回 (state, today_signal)。
 
@@ -359,7 +161,7 @@ def simulate(state, close_df, open_df=None):
     state["trades"] = []
 
     sim = rotation_sim(close_df, open_df, commission=COMMISSION, start=state["start"],
-                       shift_full=True)
+                       shift_full=True, tradable=tradable)
     prev = close_df.index[close_df.index < pd.Timestamp(state["start"])]
     day0 = str(prev[-1].date()) if len(prev) else state["start"]
     state["nav_history"] = [{"date": day0, "nav": 1.0}] + [
@@ -368,12 +170,62 @@ def simulate(state, close_df, open_df=None):
     state["trades"] = [dict(t, date=str(t["date"].date())) for t in sim["trades"]]
 
     last = sim["last"]
+    cands = sorted(last["candidates"], key=lambda x: -x["mom"])
     today_signal = {
         "code": last["code"], "name": None if last["code"] is None else "",
         "mom": last["mom"], "days": last["days"], "cash_pct": last["cash_pct"],
         "cooldowns": last["cooldowns"], "candidates": last["candidates"],
+        "rank": cands[:10], "next_txt": next_action_txt(sim, last, close_df, names),
+        "triggers": trigger_lines(sim, last, close_df, open_df),
     }
     return state, today_signal
+
+
+def next_action_txt(sim, last, close_df, names):
+    """明日操作文案(纯展示, 不复制 rotation_sim 决策): 用 last 状态 + MOM_GAP 门槛推导。"""
+    code = last["code"]
+    cands = sorted(last["candidates"], key=lambda x: -x["mom"])
+    best = cands[0] if cands else None
+    disp = lambda c: f"{names.get(c, c)} ({c})" if c else "-"
+    if code is None:
+        if best is None:
+            return "明日: 无合格候选, 轮动仓维持空仓"
+        return (f"明日: 开盘买入 {disp(best['code'])} (动量{best['mom']*100:+.1f}%)"
+                f" - 若明日收盘触发止跌/止损则放弃")
+    txt = f"明日: 持有 {disp(code)}"
+    if best is not None and best["code"] != code and best["mom"] - last["mom"] > MOM_GAP:
+        txt = (f"明日: 切换 {disp(code)} -> {disp(best['code'])}"
+               f" (动量差{best['mom']-last['mom']:+.1%} > {MOM_GAP:.0%})")
+    return txt
+
+
+def trigger_lines(sim, last, close_df, open_df=None):
+    """持仓离场触发线缓冲(纯展示): 明日收盘触发才执行。"""
+    code = last["code"]
+    if code is None:
+        return []
+    today = pd.Timestamp(last["date"])
+    px = float(close_df.loc[today, code])
+    cost_d = None
+    for t in reversed(sim["trades"]):
+        if t["action"] in ("buy", "switch"):
+            cost_d = pd.Timestamp(t["date"])
+            break
+    out = []
+    if TRAIL and cost_d is not None:
+        peak = float(close_df[code].loc[cost_d:].max())
+        out.append(f"峰值回撤线 {peak*(1-TRAIL):.3f} (缓冲 {px/(peak*(1-TRAIL))-1:+.1%})")
+    drop_ref = float(close_df[code].shift(DROP_N).loc[today])
+    out.append(f"止跌线 {drop_ref*(1-DROP_X):.3f} (缓冲 {px/(drop_ref*(1-DROP_X))-1:+.1%})")
+    ma = float(close_df[code].rolling(MA_N).mean().loc[today])
+    out.append(f"MA{MA_N} {ma:.3f} (缓冲 {px/ma-1:+.1%})")
+    if cost_d is not None:
+        half_done = any(t["action"] == "tp_half" for t in sim["trades"]
+                        if pd.Timestamp(t["date"]) >= cost_d)
+        cost = float(open_df.loc[cost_d, code]) if open_df is not None else px
+        if not half_done:
+            out.append(f"止盈线 {cost*(1+TP_HALF):.3f} (缓冲 {px/(cost*(1+TP_HALF))-1:+.1%})")
+    return out
 
 
 def build_report(state, today_signal, close_df, names, bench_series):
@@ -408,58 +260,27 @@ def build_report(state, today_signal, close_df, names, bench_series):
         sm = {"total_return": 0.0, "annual_return": 0.0,
               "max_drawdown": 0.0, "sharpe": 0.0}
 
-    # 基准归一化到起始日: bench_series = {名称: Series}
-    common = nav_df["date"].tolist()
-    benchs = {}
-    for name, s in bench_series.items():
-        hs = s.dropna().reindex(pd.to_datetime(common), method="ffill")
-        benchs[name] = (hs / hs.iloc[0]).round(4).tolist() if len(hs) else []
-
-    # 持仓区间
-    dates = common
-    n = len(dates)
-    segments = []
-    open_seg = None
-    for t in trades:
-        if t["action"] in ("buy", "switch") and t["code"]:
-            open_seg = {"code": t["code"], "name": disp(t["code"]),
-                        "start": t["date"]}
-        elif t["action"] == "sell" and open_seg:
-            segments.append((open_seg, t["date"]))
-            open_seg = None
-    if open_seg:
-        segments.append((open_seg, today))
-    palette = ["#636efa", "#ef553b", "#00cc96", "#ab63fa", "#ffa15a",
-               "#19d3f3", "#ff6692", "#b6e880", "#ff97ff", "#fecb52",
-               "#22d3ee", "#f472b6"]
-    code_color = {}
-    for i, c in enumerate(sorted({s["code"] for s, _ in segments})):
-        code_color[c] = palette[i % len(palette)]
-    segs = []
-    for s, end in segments:
-        data = [0] * n
-        i0, i1 = dates.index(s["start"]), dates.index(end)
-        for i in range(i0, i1 + 1):
-            data[i] = 1
-        segs.append({"name": s["name"], "color": code_color[s["code"]], "data": data})
-
-    # 今日信号面板
-    if today_signal and today_signal["code"]:
-        hd = {"empty": False, "name": disp(today_signal["code"]),
-              "mom": today_signal["mom"], "days": today_signal["days"], "cash_pct": 0}
-    else:
-        hd = {"empty": True, "cash_pct": today_signal["cash_pct"] if today_signal else 1 - BASE_W}
-    sig_txt = f"{action_txt}"
-    signals = [{"txt": sig_txt, "pill": ""}]
-    if today_signal and today_signal["cooldowns"]:
-        for c in today_signal["cooldowns"]:
-            signals.append({"txt": f"冷却中: {disp(c)}（{COOLDOWN} 天内不买回）", "pill": "cool"})
-
-    cands = today_signal["candidates"] if today_signal else []
-    ranking = []
-    for c in sorted(cands, key=lambda x: -x["mom"]):
-        ranking.append({"name": disp(c["code"]), "mom": c["mom"],
-                        "hold": c["holding"], "cool": c["cool"]})
+    # 报告: 回测同款整页 plotly (plot_results 内部归一化/裁剪, 与回测完全一致)
+    sv = pd.Series(nav_df["nav"].values, index=pd.to_datetime(nav_df["date"]))
+    trades_ts = [dict(t, date=pd.Timestamp(t["date"])) for t in trades]
+    bix = bench_series["纳指"].dropna()
+    nav_dates = pd.to_datetime(nav_df["date"])
+    bix = bix[bix.index >= pd.Timestamp(state["start"])].reindex(
+        nav_dates, method="ffill").dropna()
+    bench_ret = (bix.iloc[-1] / bix.iloc[0] - 1) * 100
+    title_text = (f"v7 行业ETF信号调仓 · 模拟盘 ({state['start']} ~ {today})<br><sup>"
+                  f"当前: {holding} | {action_txt} | 净值 {nav_now:.4f} | "
+                  f"自起始 {sm['total_return']:+.1f}% 年化 {sm['annual_return']:+.1f}% | "
+                  f"夏普 {sm['sharpe']:.2f} 回撤 {sm['max_drawdown']:.1f}% | "
+                  f"纳指自起始 {bench_ret:+.1f}% | MA{MA_N} 动量{LOOKBACK}日 "
+                  f"动量差&gt;{MOM_GAP*100:.0f}% 峰值止损{TRAIL*100:.0f}% "
+                  f"止跌{DROP_N}d{DROP_X:.0%} "
+                  f"止盈浮盈{TP_HALF*100:.0f}%卖{TP_FRAC*100:.0f}% 冷却{COOLDOWN}日</sup>")
+    html = plot_results(sv, bench_series, trades_ts, names, state["start"],
+                        title_text=title_text)
+    html = inject_rank(html, today_signal, names)
+    with open(os.path.join(REPORT_DIR, "index.html"), "w", encoding="utf-8") as f:
+        f.write(html)
 
     ACTION_LABEL = {"buy": "买入", "sell": "卖出", "switch": "切换"}
     trades_since = [
@@ -469,48 +290,63 @@ def build_report(state, today_signal, close_df, names, bench_series):
         for t in trades if t["date"] >= state["start"]
     ]
 
-    bench_ret = (benchs["纳指"][-1] - 1) * 100 if benchs.get("纳指") else 0.0
-    data = {
-        "dates": dates, "navs": [round(x, 4) for x in nav_df["nav"].tolist()],
-        "benchs": {"ixic": benchs.get("纳指", []), "sse": benchs.get("上证", [])},
-        "segs": segs, "trades": trades_since,
-        "holding": hd, "signals": signals, "ranking": ranking,
-        "meta": {
-            "nav": f"{nav_now:.4f}", "ret": f"{sm['total_return']:+.1f}%",
-            "ann": f"{sm['annual_return']:+.1f}%", "dd": f"-{sm['max_drawdown']:.1f}%",
-            "sharpe": f"{sm['sharpe']:.2f}", "bench": f"{bench_ret:+.1f}%",
-            "sub": f"起始 {state['start']} ~ {today} · 当前: {holding} · {action_txt}",
-            "rule": (f"每日信号检视 | MA{MA_N}牛熊线 | 动量{LOOKBACK}日 | "
-                     f"动量差&gt;{MOM_GAP*100:.0f}%才切 | 止损{TRAIL*100:.0f}% | "
-                     f"冷却{COOLDOWN}日 | 底仓{BASE_W*100:.0f}%"),
-        },
-    }
-    html = HTML_TEMPLATE.replace("__DATA__", json.dumps(data, ensure_ascii=False))
-    with open(os.path.join(REPORT_DIR, "index.html"), "w", encoding="utf-8") as f:
-        f.write(html)
-
     lines = ["## v7 模拟盘状态"]
     lines += [f"- 日期: {today}", f"- 当前持仓: {holding}", f"- 今日操作: {action_txt}",
-              f"- 净值: {nav_now:.4f}",
+              f"- 明日操作: {today_signal['next_txt']}",
               f"- 自起始({state['start']})收益: {sm['total_return']:+.1f}% 年化: {sm['annual_return']:+.1f}%",
               f"- 夏普: {sm['sharpe']:.2f} 最大回撤: {sm['max_drawdown']:.1f}%",
               f"- 纳指自起始: {bench_ret:+.1f}%"]
     if trades_since:
         lines += ["", "### 交易记录", "| 日期 | 操作 | 标的 | 原因 |", "|---|---|---|---|"]
         lines += [f"| {t['date']} | {t['label']} | {t['name']} | {t['reason']} |" for t in trades_since]
+    lines += ["", "### 动量排名 TOP5"]
+    lines += [f"{i}. {names.get(r['code'], r['code'])} ({r['code']}) "
+              f"动量{r['mom']*100:+.1f}%{' [持仓]' if r['holding'] else (' [冷却]' if r['cool'] else '')}"
+              for i, r in enumerate(today_signal["rank"][:5], 1)]
+    if today_signal["triggers"]:
+        lines += ["", "### 持仓触发线 (明日收盘触发才执行)"]
+        lines += [f"- {t}" for t in today_signal["triggers"]]
     return "\n".join(lines)
+
+
+def inject_rank(html, today_signal, names):
+    """往 plotly 报告页尾注入 明日操作 + 动量排名表。"""
+    disp = lambda c: f"{names.get(c, c)} ({c})"
+    trig = " | ".join(today_signal["triggers"]) or "无持仓"
+    rank_rows = "".join(
+        f"<tr><td>{i}</td><td>{disp(r['code'])}</td>"
+        f"<td>{r['mom']*100:+.1f}%</td>"
+        f"<td>{'持仓' if r['holding'] else ('冷却' if r['cool'] else '')}</td></tr>"
+        for i, r in enumerate(today_signal["rank"], 1))
+    extra = f"""
+<div style="font-family:sans-serif;padding:0 12px;max-width:1100px;margin:0 auto">
+  <div style="background:#fffbe6;border:1px solid #e6c200;border-radius:6px;padding:10px 14px;margin-top:14px">
+    <b>明日操作</b> {today_signal['next_txt']}<br>
+    <span style="color:#666;font-size:13px">触发线(明日收盘触发才执行): {trig}</span>
+  </div>
+  <h3 style="margin:18px 0 6px">动量排名 TOP10 (180日动量)</h3>
+  <table style="border-collapse:collapse;font-family:sans-serif;font-size:14px">
+    <tr style="background:#f0f0f0"><th style="padding:4px 10px;border:1px solid #ddd">#</th>
+      <th style="padding:4px 10px;border:1px solid #ddd">标的</th>
+      <th style="padding:4px 10px;border:1px solid #ddd">动量</th>
+      <th style="padding:4px 10px;border:1px solid #ddd">状态</th></tr>
+    {rank_rows}
+  </table>
+</div>
+</body>"""
+    return html.replace("</body>", extra)
 
 
 def main():
     update_bench()
-    close_df, open_df, names = load_close_df()
+    close_df, open_df, names, tradable = load_close_df()
     bench_series = {}
     for name, path in BENCH_CACHES.items():
         d = json.load(open(path))
         bench_series[name] = pd.Series(d["close"], index=pd.to_datetime(d["dates"])).sort_index()
     print(f"数据: {len(close_df)} 个交易日, {len(close_df.columns)} 只")
     state = load_state()
-    state, today_signal = simulate(state, close_df, open_df=open_df)
+    state, today_signal = simulate(state, close_df, open_df=open_df, tradable=tradable, names=names)
     save_state(state)
     report = build_report(state, today_signal, close_df, names, bench_series)
     print(report)

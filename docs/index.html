@@ -1,198 +1,22 @@
-<!DOCTYPE html>
-<html lang="zh">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>v7 行业ETF信号调仓模拟盘</title>
-<script src="https://cdn.plot.ly/plotly-3.7.0.min.js"></script>
-<style>
-  :root{--bg:#0f172a;--card:#1e293b;--line:#334155;--txt:#e2e8f0;--mut:#94a3b8;
-        --acc:#636efa;--up:#34d399;--down:#f87171}
-  *{box-sizing:border-box}
-  body{margin:0;font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
-       background:var(--bg);color:var(--txt)}
-  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 60px}
-  h1{font-size:22px;margin:0 0 2px;letter-spacing:.5px}
-  .sub{color:var(--mut);font-size:13px;margin:0 0 6px;line-height:1.6}
-  .tag{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;
-       background:rgba(99,102,241,.15);color:#a5b4fc;margin-top:4px}
-  .cards{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:20px 0}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
-  .card span{display:block;color:var(--mut);font-size:11px;margin-bottom:6px}
-  .card b{font-size:18px}
-  .card small{color:var(--mut);font-size:11px}
-  .pos{color:var(--up)}.neg{color:var(--down)}
-  .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;
-         padding:16px 18px;margin-bottom:20px}
-  .panel h3{margin:0 0 12px;font-size:14px;color:var(--mut);font-weight:600}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
-  @media(max-width:800px){.cards{grid-template-columns:repeat(3,1fr)}.grid2{grid-template-columns:1fr}}
-  .holding-big{font-size:26px;font-weight:700;margin:4px 0 10px}
-  .mom-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #263249;font-size:13px}
-  .mom-row:last-child{border-bottom:none}
-  .mom-row .nm{color:var(--txt)}
-  .mom-row .val{font-family:ui-monospace,Menlo,monospace}
-  .pill{padding:1px 8px;border-radius:999px;font-size:11px;margin-left:8px}
-  .pill.hold{background:rgba(52,211,153,.15);color:var(--up)}
-  .pill.cool{background:rgba(248,113,113,.15);color:var(--down)}
-  .empty{color:var(--mut);font-size:13px;padding:20px 0;text-align:center}
-  table{width:100%;border-collapse:collapse;font-size:12.5px}
-  th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #263249}
-  th{color:var(--mut);font-weight:600}
-  .badge{padding:2px 8px;border-radius:999px;font-size:11px;color:#0f172a;font-weight:600}
-  .badge.buy{background:var(--up)}.badge.sell{background:var(--down)}
-  .badge.switch{background:#93c5fd}.badge.hold{background:#c4b5fd}
-  .ticks{float:right;font-size:12px}
-  .tickbtn{cursor:pointer;padding:2px 10px;border-radius:6px;border:1px solid var(--line);margin-left:6px;color:var(--mut)}
-  .tickbtn.on{background:var(--acc);border-color:var(--acc);color:#fff}
-  #chart{width:100%;height:420px}
-  #chart2{width:100%;height:210px}
-</style>
-</head>
+<html>
+<head><meta charset="utf-8" /></head>
 <body>
-<div class="wrap">
-  <h1>v7 行业ETF信号调仓 · 模拟盘</h1>
-  <p class="sub" id="sub"></p>
-  <span class="tag" id="rule"></span>
-  <div class="cards">
-    <div class="card"><span>当前净值</span><b id="nav"></b></div>
-    <div class="card"><span>自起始收益</span><b id="ret"></b></div>
-    <div class="card"><span>年化</span><b id="ann"></b></div>
-    <div class="card"><span>最大回撤</span><b id="dd"></b></div>
-    <div class="card"><span>夏普</span><b id="sharpe"></b></div>
-    <div class="card"><span>纳指自起始</span><b id="bench"></b></div>
+    <div style="height:1400px; width:100%;">                        <script>window.PlotlyConfig = {MathJaxConfig: 'local'};</script>
+        <script charset="utf-8" src="https://cdn.plot.ly/plotly-3.7.0.min.js" integrity="sha256-jvTGqxNp8AGWEcvNLVuKr+8j5dGe9Yw51LQkmDH+IYA=" crossorigin="anonymous"></script>                <div id="8f1f7d02-654f-4cc5-9f77-6de07ff621f6" class="plotly-graph-div" style="height:100%; width:100%;"></div>            <script>                window.PLOTLYENV=window.PLOTLYENV || {};                                if (document.getElementById("8f1f7d02-654f-4cc5-9f77-6de07ff621f6")) {                    Plotly.newPlot(                        "8f1f7d02-654f-4cc5-9f77-6de07ff621f6",                        [{"line":{"color":"steelblue","width":2},"mode":"lines","name":"策略","x":["2026-07-31T00:00:00.000000","2026-08-03T00:00:00.000000","2026-08-04T00:00:00.000000","2026-08-05T00:00:00.000000","2026-08-06T00:00:00.000000","2026-08-07T00:00:00.000000"],"y":{"dtype":"f8","bdata":"AAAAAAAA8D\u002fEsS5uowHwP8iYu5aQD\u002fA\u002fsp3vp8ZL8D8TYcPTK2XwP3Qkl\u002f+QfvA\u002f"},"type":"scatter","xaxis":"x","yaxis":"y"},{"line":{"color":"coral","dash":"dash","width":1.5},"mode":"lines","name":"纳指","x":["2026-07-31T00:00:00.000000","2026-08-03T00:00:00.000000","2026-08-04T00:00:00.000000","2026-08-05T00:00:00.000000","2026-08-06T00:00:00.000000"],"y":{"dtype":"f8","bdata":"AAAAAAAA8D9L0RlPLVfwP8gO6mCCw\u002fA\u002f4HQ6s76f8D\u002fKcxYxT53wPw=="},"type":"scatter","xaxis":"x","yaxis":"y"},{"line":{"color":"seagreen","dash":"dash","width":1.5},"mode":"lines","name":"上证","x":["2026-07-31T00:00:00.000000","2026-08-03T00:00:00.000000","2026-08-04T00:00:00.000000","2026-08-05T00:00:00.000000","2026-08-06T00:00:00.000000","2026-08-07T00:00:00.000000"],"y":{"dtype":"f8","bdata":"AAAAAAAA8D+5zVV1sM\u002fvP2T3xpSq6u8\u002firp4VP4J8D\u002fTY6Cmuj7wP16E12A3TvA\u002f"},"type":"scatter","xaxis":"x","yaxis":"y"},{"marker":{"color":"steelblue"},"name":"策略","x":["2026"],"y":{"dtype":"f8","bdata":"qB6F61G4CEA="},"type":"bar","xaxis":"x2","yaxis":"y2"},{"marker":{"color":"coral"},"name":"纳指","opacity":0.7,"x":["2026"],"y":{"dtype":"f8","bdata":"JI3Zet7RIECAxl7T9Pn1P6Lai6zICiNAOuJN78efI0CQXxsaMkVEwHLeY2Kb8UVAx3yI1gnpMED83+M88cf8v7YU1IuTzy9AO3vMofkoQ0DCzVahT8oqQOF3w7Aw6xZA73pZ6iYDHkB7\u002frE9zj08QJOzZ6nqEQ\u002fAUWygyOGcQUBQE1st+tFFQHENEIicYzVA4t4uo82MQMCKW1JFKLZFQBW8HL4opDxAJcxbyoZbNEAxGVxsCLsqQA=="},"type":"bar","xaxis":"x2","yaxis":"y2"},{"marker":{"color":"seagreen"},"name":"上证","opacity":0.7,"x":["2026"],"y":{"dtype":"f8","bdata":"YLfq++eFFkAY4KKLy5wowB1Hu6orOxpAUFs5W1OXOMAJ8wbRn002QGzDEdm7uytASipgIEczE0AQ1yjLC0AuwPTVSUZqmw3AUqNqtm1VKUDS6RbKHmkyQO59loghj\u002fm\u002f"},"type":"bar","xaxis":"x2","yaxis":"y2"},{"hovertext":["有色金属 (159980): 2026-08-03 ~ 2026-08-07 买入净值 1.00","有色金属 (159980): 2026-08-03 ~ 2026-08-07 买入净值 1.00"],"line":{"color":"steelblue","width":4},"mode":"lines","name":"有色金属 159980","showlegend":false,"x":["2026-08-03T00:00:00","2026-08-07T00:00:00"],"xaxis":"x","y":[1.0004,1.0004],"yaxis":"y","type":"scatter"},{"cells":{"values":[["年化收益 %","夏普","最大回撤 %","总收益 %","买入次数","切换次数","轮动仓"],["363.6","17.99","0.0","3.1","1","0","55%"],["12.1","0.52","55.6","1213.0","-","-","-"],["1.4","0.04","52.3","16.6","-","-","-"]]},"header":{"values":["指标","策略","纳指","上证"]},"type":"table","domain":{"x":[0.55,1.0],"y":[0.0,0.315]}}],                        {"template":{"data":{"histogram2dcontour":[{"type":"histogram2dcontour","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"choropleth":[{"type":"choropleth","colorbar":{"outlinewidth":0,"ticks":""}}],"histogram2d":[{"type":"histogram2d","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"heatmap":[{"type":"heatmap","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"contourcarpet":[{"type":"contourcarpet","colorbar":{"outlinewidth":0,"ticks":""}}],"contour":[{"type":"contour","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"surface":[{"type":"surface","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"mesh3d":[{"type":"mesh3d","colorbar":{"outlinewidth":0,"ticks":""}}],"scatter":[{"fillpattern":{"fillmode":"overlay","size":10,"solidity":0.2},"type":"scatter"}],"parcoords":[{"type":"parcoords","line":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterpolargl":[{"type":"scatterpolargl","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"bar":[{"error_x":{"color":"#2a3f5f"},"error_y":{"color":"#2a3f5f"},"marker":{"line":{"color":"#E5ECF6","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"bar"}],"scattergeo":[{"type":"scattergeo","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterpolar":[{"type":"scatterpolar","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"histogram":[{"marker":{"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"histogram"}],"scattergl":[{"type":"scattergl","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatter3d":[{"type":"scatter3d","line":{"colorbar":{"outlinewidth":0,"ticks":""}},"marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattermap":[{"type":"scattermap","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattermapbox":[{"type":"scattermapbox","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterternary":[{"type":"scatterternary","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattercarpet":[{"type":"scattercarpet","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"carpet":[{"aaxis":{"endlinecolor":"#2a3f5f","gridcolor":"white","linecolor":"white","minorgridcolor":"white","startlinecolor":"#2a3f5f"},"baxis":{"endlinecolor":"#2a3f5f","gridcolor":"white","linecolor":"white","minorgridcolor":"white","startlinecolor":"#2a3f5f"},"type":"carpet"}],"table":[{"cells":{"fill":{"color":"#EBF0F8"},"line":{"color":"white"}},"header":{"fill":{"color":"#C8D4E3"},"line":{"color":"white"}},"type":"table"}],"barpolar":[{"marker":{"line":{"color":"#E5ECF6","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"barpolar"}],"pie":[{"automargin":true,"type":"pie"}]},"layout":{"autotypenumbers":"strict","colorway":["#636efa","#EF553B","#00cc96","#ab63fa","#FFA15A","#19d3f3","#FF6692","#B6E880","#FF97FF","#FECB52"],"font":{"color":"#2a3f5f"},"hovermode":"closest","hoverlabel":{"align":"left"},"paper_bgcolor":"white","plot_bgcolor":"#E5ECF6","polar":{"bgcolor":"#E5ECF6","angularaxis":{"gridcolor":"white","linecolor":"white","ticks":""},"radialaxis":{"gridcolor":"white","linecolor":"white","ticks":""}},"ternary":{"bgcolor":"#E5ECF6","aaxis":{"gridcolor":"white","linecolor":"white","ticks":""},"baxis":{"gridcolor":"white","linecolor":"white","ticks":""},"caxis":{"gridcolor":"white","linecolor":"white","ticks":""}},"coloraxis":{"colorbar":{"outlinewidth":0,"ticks":""}},"colorscale":{"sequential":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"sequentialminus":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"diverging":[[0,"#8e0152"],[0.1,"#c51b7d"],[0.2,"#de77ae"],[0.3,"#f1b6da"],[0.4,"#fde0ef"],[0.5,"#f7f7f7"],[0.6,"#e6f5d0"],[0.7,"#b8e186"],[0.8,"#7fbc41"],[0.9,"#4d9221"],[1,"#276419"]]},"xaxis":{"gridcolor":"white","linecolor":"white","ticks":"","title":{"standoff":15},"zerolinecolor":"white","automargin":true,"zerolinewidth":2},"yaxis":{"gridcolor":"white","linecolor":"white","ticks":"","title":{"standoff":15},"zerolinecolor":"white","automargin":true,"zerolinewidth":2},"scene":{"xaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2},"yaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2},"zaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2}},"shapedefaults":{"line":{"color":"#2a3f5f"}},"annotationdefaults":{"arrowcolor":"#2a3f5f","arrowhead":0,"arrowwidth":1},"geo":{"bgcolor":"white","landcolor":"#E5ECF6","subunitcolor":"white","showland":true,"showlakes":true,"lakecolor":"white"},"title":{"x":0.05},"mapbox":{"style":"light"}}},"xaxis":{"anchor":"y","domain":[0.0,1.0],"dtick":"D1","tickformat":"%Y-%m-%d"},"yaxis":{"anchor":"x","domain":[0.565,0.9999999999999999],"type":"log","title":{"text":"净值(对数)"}},"xaxis2":{"anchor":"y2","domain":[0.0,0.45]},"yaxis2":{"anchor":"x2","domain":[0.0,0.315],"title":{"text":"年度收益 (%)"}},"annotations":[{"font":{"size":16},"showarrow":false,"text":"净值(对数) + 持仓","x":0.5,"xanchor":"center","xref":"paper","y":0.9999999999999999,"yanchor":"bottom","yref":"paper"},{"font":{"size":16},"showarrow":false,"text":"年度收益对比","x":0.225,"xanchor":"center","xref":"paper","y":0.315,"yanchor":"bottom","yref":"paper"},{"font":{"size":16},"showarrow":false,"text":"策略指标","x":0.775,"xanchor":"center","xref":"paper","y":0.315,"yanchor":"bottom","yref":"paper"}],"title":{"text":"v7 行业ETF信号调仓 · 模拟盘 (2026-08-03 ~ 2026-08-07)\u003cbr\u003e\u003csup\u003e当前: 底仓 45% 黄金 (518880) + 有色金属 (159980) | 持有 有色金属 (159980) | 净值 1.0309 | 自起始 +3.1% 年化 +363.6% | 夏普 17.99 回撤 0.0% | 纳指自起始 +1.7% | MA200 动量180日 动量差&gt;100% 峰值止损20% 止跌20d8% 止盈浮盈80%卖50% 冷却20日\u003c\u002fsup\u003e"},"height":1400},                        {"responsive": true}                    )                };            </script>        </div>
+
+<div style="font-family:sans-serif;padding:0 12px;max-width:1100px;margin:0 auto">
+  <div style="background:#fffbe6;border:1px solid #e6c200;border-radius:6px;padding:10px 14px;margin-top:14px">
+    <b>明日操作</b> 明日: 持有 有色金属 (159980)<br>
+    <span style="color:#666;font-size:13px">触发线(明日收盘触发才执行): 峰值回撤线 1.730 (缓冲 +25.0%) | 止跌线 1.914 (缓冲 +13.0%) | MA200 2.029 (缓冲 +6.6%) | 止盈线 3.818 (缓冲 -43.3%)</span>
   </div>
-  <div class="panel"><h3>策略净值 vs 纳指/上证
-    <span class="ticks"><span class="tickbtn" data-k="day">日</span><span class="tickbtn" data-k="month">月</span><span class="tickbtn" data-k="year">年</span></span>
-  </h3><div id="chart"></div></div>
-  <div class="panel"><h3>年度收益对比</h3><div id="chart2"></div></div>
-  <div class="grid2">
-    <div class="panel">
-      <h3>今日信号</h3>
-      <div id="holding"></div>
-      <div id="signals"></div>
-    </div>
-    <div class="panel">
-      <h3>动量排名（今日可买候选）</h3>
-      <div id="ranking"></div>
-    </div>
-  </div>
-  <div class="panel"><h3>交易记录</h3>
-    <table><thead><tr><th>日期</th><th>操作</th><th>标的</th><th>原因</th></tr></thead>
-    <tbody id="trades"></tbody></table>
-  </div>
+  <h3 style="margin:18px 0 6px">动量排名 TOP10 (180日动量)</h3>
+  <table style="border-collapse:collapse;font-family:sans-serif;font-size:14px">
+    <tr style="background:#f0f0f0"><th style="padding:4px 10px;border:1px solid #ddd">#</th>
+      <th style="padding:4px 10px;border:1px solid #ddd">标的</th>
+      <th style="padding:4px 10px;border:1px solid #ddd">动量</th>
+      <th style="padding:4px 10px;border:1px solid #ddd">状态</th></tr>
+    <tr><td>1</td><td>有色金属 (159980)</td><td>+18.1%</td><td>持仓</td></tr><tr><td>2</td><td>云计算 (516510)</td><td>+9.1%</td><td></td></tr>
+  </table>
 </div>
-<script id="data" type="application/json">{"dates": ["2026-07-31", "2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06"], "navs": [1.0, 0.9913, 1.0073, 1.0106, 1.034], "benchs": {"ixic": [1.0, 1.0213, 1.0477, 1.039, 1.039], "sse": [1.0, 0.9941, 0.9974, 1.0024, 1.0153]}, "segs": [{"name": "原油 (501018)", "color": "#636efa", "data": [0, 1, 1, 1, 1]}], "trades": [{"date": "2026-08-03", "label": "买入", "kind": "buy", "name": "原油 (501018)", "reason": "new"}], "holding": {"empty": false, "name": "原油 (501018)", "mom": 0.6791630340017436, "days": 4, "cash_pct": 0}, "signals": [{"txt": "持有 原油 (501018)", "pill": ""}], "ranking": [{"name": "原油 (501018)", "mom": 0.6791630340017436, "hold": true, "cool": false}, {"name": "嘉实原油 (160723)", "mom": 0.525574499629355, "hold": false, "cool": false}, {"name": "纳指科技 (159509)", "mom": 0.267825311942959, "hold": false, "cool": false}, {"name": "人工智能 (515070)", "mom": 0.24707135250266243, "hold": false, "cool": false}, {"name": "有色金属 (159980)", "mom": 0.19410456062291415, "hold": false, "cool": false}, {"name": "纳指ETF (513100)", "mom": 0.1782744282744282, "hold": false, "cool": false}, {"name": "标普500 (513500)", "mom": 0.11954697986577179, "hold": false, "cool": false}, {"name": "云计算 (516510)", "mom": 0.09623689080814302, "hold": false, "cool": false}, {"name": "豆粕 (159985)", "mom": 0.06231003039513672, "hold": false, "cool": false}, {"name": "红利ETF (510880)", "mom": 0.012547051442910906, "hold": false, "cool": false}], "meta": {"nav": "1.0340", "ret": "+3.4%", "ann": "+721.9%", "dd": "-0.9%", "sharpe": "9.42", "bench": "+3.9%", "sub": "起始 2026-08-03 ~ 2026-08-06 · 当前: 底仓 45% 黄金 (518880) + 原油 (501018) · 持有 原油 (501018)", "rule": "每日信号检视 | MA200牛熊线 | 动量180日 | 动量差&gt;100%才切 | 止损20% | 冷却20日 | 底仓45%"}}</script>
-<script>
-const D = JSON.parse(document.getElementById('data').textContent);
-const $ = id => document.getElementById(id);
-$('sub').textContent = D.meta.sub;
-$('rule').textContent = D.meta.rule;
-$('nav').textContent = D.meta.nav;
-$('ret').textContent = D.meta.ret;
-$('ann').textContent = D.meta.ann;
-$('dd').textContent = D.meta.dd;
-$('sharpe').textContent = D.meta.sharpe;
-$('bench').textContent = D.meta.bench;
-
-const fmt = (x, cls) => `<b class="${cls}">${x}</b>`;
-const hd = D.holding;
-$('holding').innerHTML = hd.empty
-  ? '<div class="empty">轮动仓空仓（持币 ' + (hd.cash_pct*100).toFixed(0) + '%）</div>'
-  : `<div class="holding-big">${hd.name}</div>
-     <div class="mom-row"><span class="nm">持仓</span><span class="val ${hd.mom>0?'pos':'neg'}">动量 ${(hd.mom*100).toFixed(1)}%</span></div>
-     <div class="mom-row"><span class="nm">持有天数</span><span class="val">${hd.days}</span></div>`;
-$('signals').innerHTML = D.signals.map(s =>
-  `<div class="mom-row"><span class="nm">${s.txt}${s.pill}</span><span class="val"></span></div>`).join('')
-  || '<div class="empty">-</div>';
-
-$('ranking').innerHTML = D.ranking.length
-  ? D.ranking.map((r,i) =>
-    `<div class="mom-row"><span class="nm">${i+1}. ${r.name}${r.hold?'<span class="pill hold">持仓</span>':''}${r.cool?'<span class="pill cool">冷却</span>':''}</span>
-     <span class="val ${r.mom>0?'pos':'neg'}">${(r.mom*100).toFixed(1)}%</span></div>`).join('')
-  : '<div class="empty">今日无站上牛熊线的可买标的</div>';
-
-const tb = $('trades');
-if (!D.trades.length) { tb.innerHTML = '<tr><td colspan="4" class="empty">暂无交易</td></tr>'; }
-else for (const t of D.trades) {
-  const tr = document.createElement('tr');
-  tr.innerHTML = `<td>${t.date}</td><td><span class="badge ${t.kind}">${t.label}</span></td><td>${t.name}</td><td>${t.reason}</td>`;
-  tb.appendChild(tr);
-}
-
-const PALETTE = ['steelblue','coral','seagreen','goldenrod','mediumpurple',
-                 'tomato','dodgerblue','chocolate','teal','hotpink','olive','indianred'];
-const traces = [
-  {type:'scatter', mode:'lines', name:'策略', x:D.dates, y:D.navs,
-   line:{color:'steelblue', width:2}},
-  {type:'scatter', mode:'lines', name:'纳指', x:D.dates, y:D.benchs.ixic,
-   line:{color:'coral', width:1.5, dash:'dash'}},
-  {type:'scatter', mode:'lines', name:'上证', x:D.dates, y:D.benchs.sse,
-   line:{color:'seagreen', width:1.5, dash:'dash'}},
-];
-const holds = [];
-let cur = null, start = null, buyNav = null;
-for (const t of D.trades) {
-  const di = D.dates.indexOf(t.date);
-  if (di < 0) continue;
-  if (t.kind === 'buy' || t.kind === 'switch') {
-    if (cur) holds.push({nm:cur, s:start, e:t.date, nav:buyNav});
-    cur = t.name; start = t.date; buyNav = D.navs[di];
-  } else if (t.kind === 'sell' && cur) {
-    holds.push({nm:cur, s:start, e:t.date, nav:buyNav});
-    cur = null;
-  }
-}
-if (cur) holds.push({nm:cur, s:start, e:D.dates[D.dates.length-1], nav:buyNav});
-const nmColor = {};
-for (const h of holds) if (!(h.nm in nmColor)) nmColor[h.nm] = PALETTE[Object.keys(nmColor).length % PALETTE.length];
-for (const h of holds) traces.push({type:'scatter', mode:'lines', x:[h.s, h.e], y:[h.nav, h.nav],
-  line:{color:nmColor[h.nm], width:4}, showlegend:false, hoverinfo:'text',
-  hovertext:`${h.nm}: ${h.s} ~ ${h.e}<br>买入净值 ${h.nav.toFixed(2)}`});
-for (let i = 0; i < holds.length - 1; i++)
-  if (holds[i].e === holds[i+1].s)
-    traces.push({type:'scatter', mode:'lines', x:[holds[i].e, holds[i].e],
-      y:[holds[i].nav, holds[i+1].nav], line:{color:'rgba(128,128,128,0.7)', width:1.5, dash:'dot'},
-      hoverinfo:'skip', showlegend:false});
-
-const TICKS = {
-  day: {dtick:'D1', tickformat:'%Y-%m-%d'},
-  month: {dtick:'M1', tickformat:'%Y-%m'},
-  year: {dtick:'M12', tickformat:'%Y'}
-};
-const spanDays = (new Date(D.dates[D.dates.length-1]) - new Date(D.dates[0])) / 86400000;
-let tickKey = spanDays > 800 ? 'year' : spanDays > 60 ? 'month' : 'day';
-const chartLayout = {
-  template:'plotly_dark', height:420, hovermode:'closest',
-  margin:{l:60, r:20, t:36, b:40}, legend:{orientation:'h', y:1.08},
-  xaxis:{type:'date', gridcolor:'#263249'},
-  yaxis:{type:'log', title:'净值(对数)', gridcolor:'#263249'},
-};
-Plotly.newPlot($('chart'), traces, chartLayout, {responsive:true});
-Plotly.relayout($('chart'), {xaxis:TICKS[tickKey]});
-for (const b of document.querySelectorAll('.tickbtn'))
-  b.classList.toggle('on', b.dataset.k === tickKey);
-for (const b of document.querySelectorAll('.tickbtn'))
-  b.onclick = () => { tickKey = b.dataset.k;
-    Plotly.relayout($('chart'), {xaxis:TICKS[tickKey]});
-    for (const x of document.querySelectorAll('.tickbtn')) x.classList.toggle('on', x === b); };
-
-const years = [...new Set(D.dates.map(d => d.slice(0,4)))].sort();
-const yearlyRet = arr => {
-  const last = {};
-  D.dates.forEach((d,i) => { last[d.slice(0,4)] = arr[i]; });
-  return years.map((y,i) => i === 0 ? (last[y]-1)*100 : (last[y]/last[years[i-1]]-1)*100);
-};
-const bars = [{name:'策略', y:yearlyRet(D.navs), marker:{color:'steelblue'}}];
-for (const [nm, arr] of [['纳指', D.benchs.ixic], ['上证', D.benchs.sse]])
-  if (arr && arr.length) bars.push({name:nm, y:yearlyRet(arr), opacity:0.7,
-    marker:{color:nm === '纳指' ? 'coral' : 'seagreen'}});
-Plotly.newPlot($('chart2'), bars.map(b => ({type:'bar', x:years, ...b})), {
-  template:'plotly_dark', height:210, barmode:'group',
-  margin:{l:60, r:20, t:30, b:36},
-  xaxis:{dtick:'M12', tickformat:'%Y'},
-  yaxis:{title:'年度收益 (%)', gridcolor:'#263249'},
-}, {responsive:true});
-</script>
 </body>
 </html>

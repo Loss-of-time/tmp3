@@ -86,7 +86,7 @@ python3 -u paper_trade_signal.py  # v7 模拟盘（GitHub Actions 每日自动�
 ## 已验证结论（定稿，勿重复实验；细节见 [research/conclusions.md](research/conclusions.md)）
 
 - **评估基线 = 纳指 513100 买入持有**（2015起 20.9% / 2020起 21.9%），不再以沪深300 为参照；策略真实 alpha = 年化 − 同期纳指年化。
-- **官方口径**：v7 回测默认起点 **2016-08-11**（动态池首笔买入日，此前仅红利一只入池+长期空仓故截断）。**默认动态池口径**（0.8/1.0/45%）：**22.6%/夏普0.85/回撤33.5%/总收益611.7%**（2026-08-06 起点调整，旧值 23.4%/0.87/36.2%/944.6% 作废）。精选池 2015-01-01 起 **31.3%/1.13/31.6%/2004.3%**（MA200 预热修复后，旧值 22.9% 作废）。模拟盘从 2026-08-03 开户重放，不受 BT_START 影响。
+- **官方口径**：v7 回测默认起点 **2016-08-11**（动态池首笔买入日，此前仅红利一只入池+长期空仓故截断）。**默认动态池口径**（1.0/45% + 止跌20d8% + 止盈0.8卖0.5）：**19.3%/夏普0.98/回撤26.1%/总收益444.2%**（2026-08-07 定稿止跌+卖半后，旧值 15.4%/0.83/30.3%/298.2% 作废——无止跌时 tp_frac 单调到 1.0，开启止跌后 0.5 全面更优：drop 先接住回撤、半卖保留半仓减少一次入场摩擦）。精选池 2015-01-01 起 **31.3%/1.13/31.6%/2004.3%**（MA200 预热修复后，旧值 22.9% 作废）。模拟盘从 2026-08-03 开户重放，不受 BT_START 影响。
 - **alpha 本质**：趋势跟随吃满黄金 2022-2025 大牛+纳指牛市（黄金 518880 单标的贡献 +146.8%），不是分散行业轮动；机制 alpha 诚实估值 **16-18%/0.7-0.8 夏普**，精选池回测含 7~10pp 样本内选池溢价。
 - **因子均为毒药**：短周期价量（alpha191 全套）、估值（行业 PE 分位）——任何与 180 日动量混合的因子都稀释收益，ETF 轮动 alpha 全在趋势跟随 → **不再深挖因子**。
 - **参数核心**：`mom_gap` 是唯一陡峭旋钮（切换门槛=策略核心）；ma_n 200/220、lookback 180、trail 0.20-0.25 平台峰区；base_w 单调权衡；cooldown/min_mom 不敏感；2015/2020 两窗形态一致 → 非过拟合。
@@ -94,11 +94,11 @@ python3 -u paper_trade_signal.py  # v7 模拟盘（GitHub Actions 每日自动�
 - **动态池**：持续更新池是正确实盘做法（同簇一只即可吃到行情）；"上市满3年"规则拖累 ~5pp 年化（min0 时 19.6%/0.75）→ 实盘按"上市即可纳入监控+MA200+180 自然约束"，诚实预期 **18-20%/0.75**（含 3 年等待则 15±2%）。
 - **高换手教训**：紧止损/短动量对摩擦零免疫（次方平台口径 61% → 我方口径 9.1%），平台"年化上百"= 窗口起点+前视成交+零摩擦叠加。
 
-## 当前实盘定稿 (2026-08-06)
+## 当前实盘定稿 (2026-08-07)
 
-- **默认池 = 动态池**（2026-08-06 定稿）：回测与模拟盘默认走 `dynpool.py`（候选=行业池23只+explore 32只，规则：上市满3年/AUM≥10亿/相关<0.8去孪生/只进不出，入池前 NaN；AUM 拉取失败降级跳过）。当前入池 26 只。主回测 `etf_rot_signal.py` 与模拟盘 `paper_trade_signal.py` 均已默认切换，`paper_trade.incremental_fetch(..., path=)` 支持 explore 缓存增量更新。
+- **默认池 = 动态池**（2026-08-07 更新）：回测与模拟盘默认走 `dynpool.py`（候选=行业池+explore 55 只，规则：上市满3年/AUM≥10亿/**不去重**(2026-08-07 实测: MOM_GAP=1.0 下同簇相关 0.8~0.98 动量差不可能 >100%, 去重冗余; 池 25→48 只年化 14.5→14.8% 换手不变, 官方 48 只口径)/只进不出/**EXCLUDE 脉冲商品(原油501018/嘉实原油160723/豆粕159985/游戏516010)**/**数据落后≥4自然日不入池(停牌)**/**被拒标的不参与轮动(仅输出 admitted 列)**/入池前 NaN；AUM 拉取失败降级跳过）。当前入池 48 只。`rotation_sim` 增加 `tradable` 掩码：停牌日不可买不可卖、持仓价格冻结（2026-08-07 因虚拟盘持仓 501018 停牌教训引入）。主回测 `etf_rot_signal.py` 与模拟盘 `paper_trade_signal.py` 均已默认切换，`paper_trade.incremental_fetch(..., path=)` 支持 explore 缓存增量更新。
 - **底仓黄金 518880**（灰犀牛预案：用户判断美国 AI 泡沫+信用崩塌；实测 2022 熊市 −0.2% vs 纳指底仓 −12.8%，砍纳指暴露到仅轮动仓 55%，只牺牲 ~1.7pp 年化）。
-- **全止盈 TP_HALF=0.8 + TP_FRAC=1.0**（2026-08-06 三参数联合调优定稿）：轮动仓浮盈 80% 全部卖出落袋，占位保留等 trend/trail 释放（tp_reset 实测更差，不启用）。TP_FRAC 0.25→1.0 单调增到物理极限（零额外摩擦）、TP_HALF 0.6~0.8 双窗平台、BASE_W 与止盈完全正交。动态池口径（2016-08-11起）**22.6%/夏普0.85/回撤33.5%/总收益611.7%**（vs 调参前 17.4%/0.66/42.9%）；3年滚动 27 窗 70% 跑赢纳指、窗口年化中位 18.5%（最差 -1.6%）、夏普中位 0.87，与诚实预期 18-20%/0.75 吻合。
+- **止跌20d8% + 止盈 TP_HALF=0.8 + TP_FRAC=0.5**（2026-08-07 止跌止盈联合调参定稿）：轮动仓收盘较 20 日前跌 ≥8% 即离场（与 trail 叠加，任一触发），浮盈 80% 卖半落袋、剩余半仓继续跟 trail/drop。止跌开启后 tp_frac 反转——0.5 卖半全面优于 1.0 全卖（drop 先接住回撤、半卖保留半仓减少一次入场摩擦）；tp_half 0.6~0.8 双窗稳定平台。3年滚动 27 窗跑赢纳指率 26%→48%（基线 15.4% 时代）、窗口年化中位 16.6%、夏普中位 0.80；2020 窗 19.0/0.94/21.6%，次选 10d8% 更强（22.5/1.00）。与诚实预期 18-20%/0.75 吻合。
 - **手动规则（策略代码不改）**：黄金/轮动仓无需年线手动卖出，轮动仓自动 trail 止损；若轮动仓持有 513100 且纳指跌破年线(MA250)，可手动平该轮动仓，重新站稳且 MA200 上方买回。
 
 ## 次方量化 RSRS 策略复刻 (2026-08-06, `backup/cubefang_rsrs.py`)
@@ -118,6 +118,14 @@ OCR 参数：RSRS 动量(27日 high/low 回归斜率 z-score [0,3.7]) 或 26日�
 ## 技术栈
 
 Python, akshare(指数成分), baostock(PE/PB历史/行业分类/股票名称/指数行情), pandas, plotly
+
+## 服务器部署（模拟盘）
+
+- 腾讯云东京 2h4g，SSH 主机/用户/key 在仓库根 `.env`（SSH_HOST/SSH_USER/SSH_KEY，`.env` 已被 .gitignore 忽略，不上传）；WSL 下需先把 key `cp` 到 `~/.ssh/ && chmod 600`（/mnt/c 路径 0444 会被拒）。
+- 代码目录 `/opt/paper-trade/`（无 .git 副本），compose 项目 `deploy`（`deploy/docker-compose.yml`），容器 `paper-trade` 端口 8077。挂载：卷 `deploy_paper-cache`→`/app/cache_bt`、`deploy_paper-docs`→`/app/docs`、bind `deploy/state/paper_signal_state.json`→`/app/paper_signal_state.json`。Dockerfile 需 COPY 根目录 `paper_signal_state.json`。
+- 更新流程（**rsync 服务器端 Permission denied 不可用，用 tar over ssh**）：本地 `tar czf - --exclude .venv --exclude .git --exclude docs --exclude paper_signal_state.json --exclude backup . | ssh ... 'rm -rf /root/paper-rsync && mkdir -p /root/paper-rsync && tar xzf - -C /root/paper-rsync'` → 服务器 `cp -a /opt/paper-trade /root/paper-trade-bak-$(date +%m%d)`、`cp -a /opt/paper-trade/deploy/state /root/keep-state` → 覆盖 `/opt/paper-trade/` 并恢复 `deploy/state/` → `docker stop paper-trade` 后 `cp -a /opt/paper-trade/cache_bt/. /var/lib/docker/volumes/deploy_paper-cache/_data/` → `cp deploy/state/paper_signal_state.json /opt/paper-trade/` → `docker compose build && docker compose up -d`（工作目录 deploy/）→ `docker logs paper-trade --tail` 验证。
+- 报告验证：服务器生成的 index.html 中文标题是 **unicode_escape 编码**，grep 中文会误判；用 `re.search(r'"text":"(v7.*?)"', html)` + `decode('unicode_escape')` 验证。
+- 服务器另有 opencode server（/root/AGENTS.md），其 AGENTS.md 注明「本机只作承载，勿当业务目标机」，地址见 .env。
 
 ## 参考资料
 

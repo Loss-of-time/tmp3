@@ -1,0 +1,20 @@
+services:
+  paper:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: paper-trade
+    restart: unless-stopped
+    ports:
+      - "8077:8077"
+    volumes:
+      - paper-cache:/app/cache_bt
+      - paper-docs:/app/docs
+      - ./state/paper_signal_state.json:/app/paper_signal_state.json
+    environment:
+      - TZ=Asia/Shanghai
+
+volumes:
+  paper-cache:
+  paper-docs:
+  paper-state:
