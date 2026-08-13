@@ -13,6 +13,7 @@
 """
 
 import json
+import os
 from datetime import datetime
 
 import numpy as np
@@ -23,6 +24,7 @@ from plotly.subplots import make_subplots
 from backtest import COMMISSION, calc_metrics
 
 # --- config ---
+OUTPUT_DIR = "output"   # 统一输出目录
 MA_N = 300          # 牛熊均线: 收盘 > MA_N 持仓, 否则空仓 (扫参 100~500, 300 最优)
 POS_WEIGHT = 1.0    # 持仓权重 (满仓)
 TRAIL = 0.20        # 峰值回撤止损: 持仓中自峰值回撤 >= TRAIL 即清仓 (0 关闭)
@@ -219,17 +221,19 @@ def main():
           f"均赢{np.mean(wins)*100:.0f}%, 均亏{np.mean(losses)*100:.0f}%, "
           f"最大单笔{max(pnls)*100:.0f}%, 翻倍{sum(1 for p in pnls if p>=1.0)}笔")
 
-    csv_file = f"etf_cyb_result_{timestamp}.csv"
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    csv_file = os.path.join(OUTPUT_DIR, f"etf_cyb_result_{timestamp}.csv")
     pd.DataFrame({"date": sv.index, "strategy": sv.values, "buyhold": bv.values}).to_csv(
         csv_file, index=False, encoding="utf-8-sig")
     print(f"      CSV -> {csv_file}")
 
     if trades:
         tdf = pd.DataFrame(trades)
-        tdf.to_csv(f"etf_cyb_trades_{timestamp}.csv", index=False, encoding="utf-8-sig")
-        print(f"      信号明细 -> etf_cyb_trades_{timestamp}.csv")
+        tdf.to_csv(os.path.join(OUTPUT_DIR, f"etf_cyb_trades_{timestamp}.csv"),
+                   index=False, encoding="utf-8-sig")
+        print(f"      信号明细 -> {os.path.join(OUTPUT_DIR, f'etf_cyb_trades_{timestamp}.csv')}")
 
-    html_file = f"etf_cyb_result_{timestamp}.html"
+    html_file = os.path.join(OUTPUT_DIR, f"etf_cyb_result_{timestamp}.html")
     with open(html_file, "w", encoding="utf-8") as f:
         f.write(plot_results(sv, bv, trades, timestamp))
     print(f"      HTML -> {html_file}")

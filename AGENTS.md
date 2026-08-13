@@ -49,6 +49,8 @@ python3 -u paper_trade_signal.py  # v7 模拟盘（GitHub Actions 每日自动�
 
 ## 输出
 
+> 所有脚本（v0~v7 回测/筛选）的结果 CSV/HTML 统一写入根目录 `output/`（`OUTPUT_DIR = "output"`，脚本自动创建）；模拟盘报告仍走 `docs/`（GitHub Pages）。
+
 ### v0 screener
 - CSV (`result_YYYYMMDD_HHMMSS.csv`)、HTML (`result_YYYYMMDD_HHMMSS.html`)：PE/PB 分位散点图 + 分位数分布直方图
 
@@ -123,7 +125,7 @@ Python, akshare(指数成分), baostock(PE/PB历史/行业分类/股票名称/�
 
 - 腾讯云东京 2h4g，SSH 主机/用户/key 在仓库根 `.env`（SSH_HOST/SSH_USER/SSH_KEY，`.env` 已被 .gitignore 忽略，不上传）；WSL 下需先把 key `cp` 到 `~/.ssh/ && chmod 600`（/mnt/c 路径 0444 会被拒）。
 - 代码目录 `/opt/paper-trade/`（无 .git 副本），compose 项目 `deploy`（`deploy/docker-compose.yml`），容器 `paper-trade` 端口 8077。挂载：卷 `deploy_paper-cache`→`/app/cache_bt`、`deploy_paper-docs`→`/app/docs`、bind `deploy/state/paper_signal_state.json`→`/app/paper_signal_state.json`。Dockerfile 需 COPY 根目录 `paper_signal_state.json`。
-- 更新流程（**rsync 服务器端 Permission denied 不可用，用 tar over ssh**）：本地 `tar czf - --exclude .venv --exclude .git --exclude docs --exclude paper_signal_state.json --exclude backup . | ssh ... 'rm -rf /root/paper-rsync && mkdir -p /root/paper-rsync && tar xzf - -C /root/paper-rsync'` → 服务器 `cp -a /opt/paper-trade /root/paper-trade-bak-$(date +%m%d)`、`cp -a /opt/paper-trade/deploy/state /root/keep-state` → 覆盖 `/opt/paper-trade/` 并恢复 `deploy/state/` → `docker stop paper-trade` 后 `cp -a /opt/paper-trade/cache_bt/. /var/lib/docker/volumes/deploy_paper-cache/_data/` → `cp deploy/state/paper_signal_state.json /opt/paper-trade/` → `docker compose build && docker compose up -d`（工作目录 deploy/）→ `docker logs paper-trade --tail` 验证。
+- 更新流程（**rsync 服务器端 Permission denied 不可用，用 tar over ssh**）：本地 `tar czf - --exclude .venv --exclude .git --exclude docs --exclude output --exclude paper_signal_state.json --exclude backup . | ssh ... 'rm -rf /root/paper-rsync && mkdir -p /root/paper-rsync && tar xzf - -C /root/paper-rsync'` → 服务器 `cp -a /opt/paper-trade /root/paper-trade-bak-$(date +%m%d)`、`cp -a /opt/paper-trade/deploy/state /root/keep-state` → 覆盖 `/opt/paper-trade/` 并恢复 `deploy/state/` → `docker stop paper-trade` 后 `cp -a /opt/paper-trade/cache_bt/. /var/lib/docker/volumes/deploy_paper-cache/_data/` → `cp deploy/state/paper_signal_state.json /opt/paper-trade/` → `docker compose build && docker compose up -d`（工作目录 deploy/）→ `docker logs paper-trade --tail` 验证。
 - 报告验证：服务器生成的 index.html 中文标题是 **unicode_escape 编码**，grep 中文会误判；用 `re.search(r'"text":"(v7.*?)"', html)` + `decode('unicode_escape')` 验证。
 - 服务器另有 opencode server（/root/AGENTS.md），其 AGENTS.md 注明「本机只作承载，勿当业务目标机」，地址见 .env。
 

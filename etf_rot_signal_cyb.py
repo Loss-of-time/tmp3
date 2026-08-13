@@ -31,6 +31,7 @@ CYB_TRAIL = 0.20
 CYB_BT_START = "2013-01-01"
 CYB_CODE = "159915V4"
 CYB_NAME = "创业板择时(v4.1)"
+OUTPUT_DIR = "output"   # 统一输出目录
 
 
 def cyb_timing_nav(close, ma_n=CYB_MA, trail=CYB_TRAIL, bt_start=CYB_BT_START):
@@ -168,14 +169,16 @@ def main():
 
     sv, benches, trades = gate_sv, gate_benches, gate_trades
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    html_file = f"etf_rot_signal_cyb_result_{timestamp}.html"
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    html_file = os.path.join(OUTPUT_DIR, f"etf_rot_signal_cyb_result_{timestamp}.html")
     with open(html_file, "w", encoding="utf-8") as f:
         f.write(plot_results(sv, benches, trades, names, timestamp))
     print(f"      HTML -> {html_file}")
     pd.DataFrame({"date": sv.index, "strategy": sv.values,
                   **{n: bv.reindex(sv.index).ffill().values for n, bv in benches.items()}}).to_csv(
-        f"etf_rot_signal_cyb_result_{timestamp}.csv", index=False, encoding="utf-8-sig")
-    print(f"      CSV -> etf_rot_signal_cyb_result_{timestamp}.csv")
+        os.path.join(OUTPUT_DIR, f"etf_rot_signal_cyb_result_{timestamp}.csv"),
+        index=False, encoding="utf-8-sig")
+    print(f"      CSV -> {os.path.join(OUTPUT_DIR, f'etf_rot_signal_cyb_result_{timestamp}.csv')}")
 
 
 if __name__ == "__main__":

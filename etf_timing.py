@@ -10,6 +10,7 @@
 """
 
 import json
+import os
 from datetime import datetime
 
 import numpy as np
@@ -20,6 +21,7 @@ from plotly.subplots import make_subplots
 from backtest import COMMISSION, calc_metrics
 
 # --- config ---
+OUTPUT_DIR = "output"   # 统一输出目录
 MA_N = 200          # 牛熊均线: 收盘 > MA_N 持仓, 否则空仓
 POS_WEIGHT = 0.6    # 持仓权重 (0.6≈半仓, 1.0 满仓)
 BT_START = "2020-01-01"
@@ -172,17 +174,19 @@ def main():
     print(f"      总收益: {sm['total_return']:.1f}%")
     print(f"      买入次数: {sum(1 for t in trades if t['action']=='buy')}")
 
-    csv_file = f"etf_result_{timestamp}.csv"
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    csv_file = os.path.join(OUTPUT_DIR, f"etf_result_{timestamp}.csv")
     pd.DataFrame({"date": sv.index, "strategy": sv.values, "hs300": bv.values}).to_csv(
         csv_file, index=False, encoding="utf-8-sig")
     print(f"      CSV -> {csv_file}")
 
     if trades:
         tdf = pd.DataFrame(trades)
-        tdf.to_csv(f"etf_trades_{timestamp}.csv", index=False, encoding="utf-8-sig")
-        print(f"      信号明细 -> etf_trades_{timestamp}.csv")
+        tdf.to_csv(os.path.join(OUTPUT_DIR, f"etf_trades_{timestamp}.csv"),
+                   index=False, encoding="utf-8-sig")
+        print(f"      信号明细 -> {os.path.join(OUTPUT_DIR, f'etf_trades_{timestamp}.csv')}")
 
-    html_file = f"etf_result_{timestamp}.html"
+    html_file = os.path.join(OUTPUT_DIR, f"etf_result_{timestamp}.html")
     with open(html_file, "w", encoding="utf-8") as f:
         f.write(plot_results(sv, bv, trades, timestamp))
     print(f"      HTML -> {html_file}")

@@ -20,6 +20,7 @@ import akshare as ak
 import baostock as bs
 
 CACHE_DIR = "cache"
+OUTPUT_DIR = "output"   # 统一输出目录
 INDICES = {"000300": "沪深300", "000905": "中证500"}
 EXCLUDE_CSRC = {
     "J66货币金融服务",          # 银行
@@ -263,13 +264,14 @@ def main():
     df = df.sort_values("pe_percentile")
 
     print("[5/6] 导出CSV...")
-    csv_file = f"result_{timestamp}.csv"
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    csv_file = os.path.join(OUTPUT_DIR, f"result_{timestamp}.csv")
     out_cols = ["code", "name", "pe", "pb", "pe_percentile", "pb_percentile", "data_points"]
     df[out_cols].to_csv(csv_file, index=False, encoding="utf-8-sig")
     print(f"      -> {csv_file}")
 
     print("[6/6] 生成可视化HTML...")
-    html_file = f"result_{timestamp}.html"
+    html_file = os.path.join(OUTPUT_DIR, f"result_{timestamp}.html")
     with open(html_file, "w", encoding="utf-8") as f:
         f.write(make_html(df, timestamp))
     print(f"      -> {html_file}")

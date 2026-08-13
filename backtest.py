@@ -24,6 +24,7 @@ import baostock as bs
 
 # --- config ---
 BT_CACHE = "cache_bt"
+OUTPUT_DIR = "output"   # 统一输出目录
 STOCK_CACHE = os.path.join(BT_CACHE, "stocks")
 
 INDICES = {"000300": "沪深300", "000905": "中证500"}
@@ -578,12 +579,13 @@ def main():
     if trade_log:
         print(f"      最后持仓 ({trade_log[-1]['date']}): {trade_log[-1]['held']}")
 
-    csv_file = f"bt_result_{timestamp}.csv"
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    csv_file = os.path.join(OUTPUT_DIR, f"bt_result_{timestamp}.csv")
     df_out = pd.DataFrame({"date": sv.index, "strategy": sv.values, "hs300": bv.values})
     df_out.to_csv(csv_file, index=False, encoding="utf-8-sig")
     print(f"      CSV -> {csv_file}")
 
-    html_file = f"bt_result_{timestamp}.html"
+    html_file = os.path.join(OUTPUT_DIR, f"bt_result_{timestamp}.html")
     html = plot_results(sv, bv, trade_log, timestamp, PE_BUY, PE_SELL)
     with open(html_file, "w", encoding="utf-8") as f:
         f.write(html)

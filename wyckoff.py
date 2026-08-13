@@ -32,6 +32,7 @@ from backtest import (
 
 # --- config ---
 WY_CACHE = "cache_wyckoff"
+OUTPUT_DIR = "output"   # 统一输出目录
 STOCK_CACHE = os.path.join(WY_CACHE, "stocks")
 
 START = "2016-01-01"      # data history window
@@ -520,17 +521,19 @@ def main():
     print(f"      交易笔数: {n_t}  胜率: {win_rate:.1f}%")
     print(f"      总收益: {sm['total_return']:.1f}%")
 
-    csv_file = f"wyckoff_result_{timestamp}.csv"
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    csv_file = os.path.join(OUTPUT_DIR, f"wyckoff_result_{timestamp}.csv")
     pd.DataFrame({"date": sv.index, "strategy": sv.values, "hs300": bv.values}).to_csv(
         csv_file, index=False, encoding="utf-8-sig")
     print(f"      CSV -> {csv_file}")
 
     if n_t:
-        tdf.sort_values("exit_date").to_csv(f"wyckoff_trades_{timestamp}.csv",
-                                            index=False, encoding="utf-8-sig")
-        print(f"      交易明细 -> wyckoff_trades_{timestamp}.csv")
+        tdf.sort_values("exit_date").to_csv(
+            os.path.join(OUTPUT_DIR, f"wyckoff_trades_{timestamp}.csv"),
+            index=False, encoding="utf-8-sig")
+        print(f"      交易明细 -> {os.path.join(OUTPUT_DIR, f'wyckoff_trades_{timestamp}.csv')}")
 
-    html_file = f"wyckoff_result_{timestamp}.html"
+    html_file = os.path.join(OUTPUT_DIR, f"wyckoff_result_{timestamp}.html")
     html = plot_results(sv, bv, trades, timestamp)
     with open(html_file, "w", encoding="utf-8") as f:
         f.write(html)

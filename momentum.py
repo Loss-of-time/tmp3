@@ -12,6 +12,7 @@ MA_N 日均线数据"的股票里挑过去 LOOKBACK 日涨幅最高(跳过最近
 复用 wyckoff 缓存 (cache_wyckoff/stocks/, 2016起后复权日线)。
 """
 
+import os
 import sys
 from datetime import datetime
 
@@ -29,6 +30,7 @@ import wyckoff as w
 from backtest import calc_metrics
 
 # --- config ---
+OUTPUT_DIR = "output"   # 统一输出目录
 LOOKBACK = 40          # 动量窗口(交易日)
 SKIP = 5               # 跳过最近 N 日, 避开短期反转
 TRAIL = 0.35           # 移动止损: 从持仓期最高收盘回撤此比例清仓
@@ -256,17 +258,19 @@ def main():
     print(f"      总收益: {sm['total_return']:.1f}%")
     print(f"      交易笔数: {n_t}  胜率: {win_rate:.1f}%")
 
-    csv_file = f"momentum_result_{timestamp}.csv"
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    csv_file = os.path.join(OUTPUT_DIR, f"momentum_result_{timestamp}.csv")
     pd.DataFrame({"date": sv.index, "strategy": sv.values, "hs300": bv.values}).to_csv(
         csv_file, index=False, encoding="utf-8-sig")
     print(f"      CSV -> {csv_file}")
 
     if n_t:
-        tdf.sort_values("exit_date").to_csv(f"momentum_trades_{timestamp}.csv",
-                                            index=False, encoding="utf-8-sig")
-        print(f"      交易明细 -> momentum_trades_{timestamp}.csv")
+        tdf.sort_values("exit_date").to_csv(
+            os.path.join(OUTPUT_DIR, f"momentum_trades_{timestamp}.csv"),
+            index=False, encoding="utf-8-sig")
+        print(f"      交易明细 -> {os.path.join(OUTPUT_DIR, f'momentum_trades_{timestamp}.csv')}")
 
-    html_file = f"momentum_result_{timestamp}.html"
+    html_file = os.path.join(OUTPUT_DIR, f"momentum_result_{timestamp}.html")
     html = plot_results(sv, bv, trades, timestamp)
     with open(html_file, "w", encoding="utf-8") as f:
         f.write(html)

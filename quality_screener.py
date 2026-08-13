@@ -26,6 +26,7 @@ import akshare as ak
 import baostock as bs
 
 CACHE_DIR = "cache_fin"
+OUTPUT_DIR = "output"   # 统一输出目录
 INDICES = {"000300": "沪深300", "000905": "中证500"}
 EXCLUDE_CSRC = {
     "J66货币金融服务", "B06煤炭开采和洗选业", "B07石油和天然气开采业",
@@ -333,7 +334,8 @@ def main():
             "pe_percentile", "pb_percentile", "pe", "pb",
             "cash_gap", "profit_gap", "cfo_net_rate", "ar_op_ratio", "report_date"]
     out = qdf[cols]
-    csv_file = f"quality_result_{timestamp}.csv"
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    csv_file = os.path.join(OUTPUT_DIR, f"quality_result_{timestamp}.csv")
     out.to_csv(csv_file, index=False, encoding="utf-8-sig")
     print(f"      -> {csv_file}")
     bs.logout()

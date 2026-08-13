@@ -33,6 +33,7 @@ from rot_core import (MA_N, LOOKBACK, MOM_GAP, MIN_MOM, TRAIL, COOLDOWN, BASE_W,
                       DROP_N, DROP_X)
 
 BENCHES = {"纳指": "cache_bt/ixic.json", "上证": "cache_bt/sh000001.json"}
+OUTPUT_DIR = "output"   # 统一输出目录
 
 
 def load_data():
@@ -237,7 +238,8 @@ def main():
     print(f"      总收益: {sm['total_return']:.1f}%")
     print(f"      买入 {n_buy} 次, 切换 {n_switch} 次")
 
-    csv_file = f"etf_rot_signal_result_{timestamp}.csv"
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    csv_file = os.path.join(OUTPUT_DIR, f"etf_rot_signal_result_{timestamp}.csv")
     df_out = {"date": sv.index, "strategy": sv.values}
     for name, bv in benches.items():
         df_out[name] = bv.values
@@ -245,11 +247,12 @@ def main():
     print(f"      CSV -> {csv_file}")
 
     if trades:
-        pd.DataFrame(trades).to_csv(f"etf_rot_signal_trades_{timestamp}.csv",
-                                    index=False, encoding="utf-8-sig")
-        print(f"      交易明细 -> etf_rot_signal_trades_{timestamp}.csv")
+        pd.DataFrame(trades).to_csv(
+            os.path.join(OUTPUT_DIR, f"etf_rot_signal_trades_{timestamp}.csv"),
+            index=False, encoding="utf-8-sig")
+        print(f"      交易明细 -> {os.path.join(OUTPUT_DIR, f'etf_rot_signal_trades_{timestamp}.csv')}")
 
-    html_file = f"etf_rot_signal_result_{timestamp}.html"
+    html_file = os.path.join(OUTPUT_DIR, f"etf_rot_signal_result_{timestamp}.html")
     params = dict(ma_n=MA_N, lookback=LOOKBACK, mom_gap=MOM_GAP, min_mom=MIN_MOM,
                   trail=TRAIL, base_w=BASE_W, base_etf=BASE_ETF, cooldown=COOLDOWN,
                   tp_half=TP_HALF, tp_frac=TP_FRAC, drop_n=DROP_N, drop_x=DROP_X, bt_start=BT_START)

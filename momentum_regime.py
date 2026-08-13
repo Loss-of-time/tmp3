@@ -24,6 +24,7 @@ from plotly.subplots import make_subplots
 from backtest import calc_metrics
 
 # --- config ---
+OUTPUT_DIR = "output"   # 统一输出目录
 REGIME = True          # 牛熊切换开关 (False = 纯 v3.1)
 LOOKBACK = 20          # 个股动量窗口(交易日)
 SKIP = 5               # 跳过最近 N 日, 避开短期反转
@@ -270,17 +271,19 @@ def main():
     print(f"      交易分布: 均赢{np.mean(wins):.1f}% 均亏{np.mean(losses):.1f}% "
           f"最大单笔{tdf['pnl_pct'].max():.1f}% 翻倍{(tdf['pnl_pct']>=100).sum()}笔")
 
-    csv_file = f"momentum_regime_result_{timestamp}.csv"
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    csv_file = os.path.join(OUTPUT_DIR, f"momentum_regime_result_{timestamp}.csv")
     pd.DataFrame({"date": sv.index, "strategy": sv.values, "hs300": bv.values}).to_csv(
         csv_file, index=False, encoding="utf-8-sig")
     print(f"      CSV -> {csv_file}")
 
     if n_t:
-        tdf.sort_values("exit_date").to_csv(f"momentum_regime_trades_{timestamp}.csv",
-                                            index=False, encoding="utf-8-sig")
-        print(f"      交易明细 -> momentum_regime_trades_{timestamp}.csv")
+        tdf.sort_values("exit_date").to_csv(
+            os.path.join(OUTPUT_DIR, f"momentum_regime_trades_{timestamp}.csv"),
+            index=False, encoding="utf-8-sig")
+        print(f"      交易明细 -> {os.path.join(OUTPUT_DIR, f'momentum_regime_trades_{timestamp}.csv')}")
 
-    html_file = f"momentum_regime_result_{timestamp}.html"
+    html_file = os.path.join(OUTPUT_DIR, f"momentum_regime_result_{timestamp}.html")
     html = plot_results(sv, bv, trades, timestamp)
     with open(html_file, "w", encoding="utf-8") as f:
         f.write(html)
